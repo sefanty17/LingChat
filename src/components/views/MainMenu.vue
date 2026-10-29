@@ -1,12 +1,13 @@
 <template>
-  <div class="relative h-full w-full overflow-hidden">
+  <div class="relative h-full w-full overflow-hidden bg-[#f5efe6]">
     <MainChat v-if="currentPage === 'gameMainView'" />
     <!-- 设置面板的挂载时机单独用 settingsMounted 控制：关闭时要等退场动画播完再卸载 -->
     <Settings v-if="settingsMounted" slide-from-right @closed="onSettingsClosed" />
 
     <!-- 背景层（最底层） -->
     <div
-      class="absolute top-0 left-[-10%] z-[-2] h-full w-[120%] bg-[url('../../assets/images/background2.png')] bg-cover bg-center will-change-transform"
+      class="absolute top-0 left-[-10%] z-[-2] h-full w-[120%] bg-cover bg-center will-change-transform"
+      :style="{ backgroundImage: `url(${background2})` }"
       ref="bgRef"
     ></div>
 
@@ -26,7 +27,7 @@
     <img
       class="pointer-events-none absolute bottom-0 left-1/2 z-3 max-h-full max-w-full transform-[translate(-50%,0)] will-change-transform select-none"
       ref="charRef"
-      src="../../assets/images/alona.png"
+      :src="alona"
       :alt="$t('views.mainMenu.characterAlt')"
       draggable="false"
       @contextmenu.prevent
@@ -99,6 +100,8 @@
 
 <script setup lang="ts">
 import { getScriptList, type ScriptSummary } from "@/api/services/script-info";
+import alona from "@/assets/images/alona.png";
+import background2 from "@/assets/images/background2.png";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
