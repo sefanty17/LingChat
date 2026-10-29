@@ -1,5 +1,7 @@
 <template>
-  <div class="relative h-full w-full overflow-hidden bg-[#f5efe6]">
+  <!-- 根节点的底色只做兜底：图片加载失败时窗口仍是不透明的。
+       isolate 必不可少，否则 z-[-2] 的背景层会落到外层层叠上下文里，被这层底色完全盖住 -->
+  <div class="relative isolate h-full w-full overflow-hidden bg-[#f5efe6]">
     <MainChat v-if="currentPage === 'gameMainView'" />
     <!-- 设置面板的挂载时机单独用 settingsMounted 控制：关闭时要等退场动画播完再卸载 -->
     <Settings v-if="settingsMounted" slide-from-right @closed="onSettingsClosed" />
