@@ -8,6 +8,8 @@ export type ConfigKind = "string" | "secret" | "number" | "boolean";
 export interface ConfigFieldDecl {
   key: string;
   label: string;
+  /** 输入框下面那行小字（可选），说明这个字段该填什么、去哪儿拿。 */
+  hint?: string | null;
   kind: ConfigKind;
   required: boolean;
   default?: unknown;
@@ -18,6 +20,19 @@ export interface EnvDecl {
   label: string;
 }
 
+/** WS 连接方向：client 连出去 / server 监听。 */
+export type WsMode = "client" | "server";
+
+/** WS 连接运行状态。 */
+export type WsState = "stopped" | "connecting" | "connected" | "error";
+
+/** 插件声明的一条 WebSocket 连接及其当前状态。 */
+export interface WsConnInfo {
+  id: string;
+  mode: WsMode;
+  state: WsState;
+}
+
 export interface PluginInfo {
   id: string;
   name: string;
@@ -26,11 +41,19 @@ export interface PluginInfo {
   author?: string | null;
   enabled: boolean;
   config_schema: ConfigFieldDecl[];
+  /** 已保存的配置值（不含 secret 字段）。 */
+  config: Record<string, unknown>;
   env: EnvDecl[];
   tools: string[];
   /** 插件声明携带的资源类型（characters / scripts / musics / backgrounds / ambients）。 */
   resources: string[];
+  /** 插件声明的 WebSocket 连接（含当前运行状态）。 */
+  ws: WsConnInfo[];
+  /** 前置插件 id：这些插件必须已安装且已启用，本插件才能启用。 */
+  depends_on: string[];
   error?: string | null;
+  /** 启动阶段未能运行的原因（`错误码|补充信息` 或纯错误码）。 */
+  startup_error?: string | null;
 }
 
 /** 后端 plugins/resources.rs PluginResourceEntry 的镜像。 */
@@ -58,6 +81,11 @@ export async function setPluginEnabled(id: string, enabled: boolean): Promise<vo
 
 export async function savePluginConfig(id: string, config: Record<string, unknown>): Promise<void> {
   return invoke("plugin_save_config", { id, config });
+}
+
+/** 当前是否有插件接管台词语音的播放（本机静音、由插件转发到外部程序）。 */
+export async function isPluginVoicePlaybackActive(): Promise<boolean> {
+  return invoke("plugin_voice_playback_active");
 }
 
 export async function reloadPlugins(): Promise<void> {

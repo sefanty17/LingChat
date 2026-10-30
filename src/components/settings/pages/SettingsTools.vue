@@ -157,6 +157,86 @@
             </div>
           </div>
         </div>
+        <div class="mt-3 rounded-xl border border-white/15 bg-white/5 px-4 py-3">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+              <h3 class="font-semibold text-white">
+                {{ $t("ui.toolCalls.toolRagTitle") }}
+              </h3>
+              <p class="mt-1 text-sm leading-relaxed text-gray-300">
+                {{ $t("ui.toolCalls.toolRagHint") }}
+              </p>
+            </div>
+            <div class="flex shrink-0 items-center">
+              <Toggle
+                :checked="form.tool_rag"
+                @change="(value: boolean) => (form.tool_rag = value)"
+              />
+            </div>
+          </div>
+          <div
+            v-if="form.tool_rag"
+            class="mt-3 flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="min-w-0">
+              <h4 class="text-sm font-semibold text-white">
+                {{ $t("ui.toolCalls.toolCacheCapacityTitle") }}
+              </h4>
+              <p class="mt-1 text-xs leading-relaxed text-gray-400">
+                {{
+                  $t("ui.toolCalls.toolCacheCapacityHint", {
+                    min: MIN_TOOL_CACHE_CAPACITY,
+                    max: MAX_TOOL_CACHE_CAPACITY,
+                  })
+                }}
+              </p>
+            </div>
+            <label
+              class="focus-within:border-brand flex shrink-0 items-center gap-2 rounded-lg border border-white/20 bg-black/20 px-3 py-2"
+            >
+              <input
+                v-model.number="form.tool_cache_capacity"
+                type="number"
+                :min="MIN_TOOL_CACHE_CAPACITY"
+                :max="MAX_TOOL_CACHE_CAPACITY"
+                step="1"
+                class="w-14 [appearance:textfield] bg-transparent text-center font-semibold text-white outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                :aria-label="$t('ui.toolCalls.toolCacheCapacityTitle')"
+                @blur="normalizeToolCacheCapacity"
+              />
+              <span class="text-sm text-gray-300">{{
+                $t("ui.toolCalls.toolCacheCapacityUnit")
+              }}</span>
+            </label>
+          </div>
+        </div>
+        <div class="mt-3 rounded-xl border border-white/15 bg-white/5 px-4 py-3">
+          <h3 class="font-semibold text-white">
+            {{ $t("ui.toolCalls.toolRecommendTitle") }}
+          </h3>
+          <p class="mt-1 text-sm leading-relaxed text-gray-300">
+            {{ $t("ui.toolCalls.toolRecommendHint") }}
+          </p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              v-for="mode in toolRecommendModes"
+              :key="mode"
+              type="button"
+              class="rounded-lg border px-3 py-1.5 text-sm transition-colors duration-200"
+              :class="
+                form.tool_recommend_mode === mode
+                  ? 'border-brand bg-brand/15 text-white'
+                  : 'border-white/15 bg-black/20 text-gray-300 hover:bg-white/10'
+              "
+              @click="form.tool_recommend_mode = mode"
+            >
+              {{ $t(`ui.toolCalls.toolRecommendModes.${mode}.label`) }}
+            </button>
+          </div>
+          <p class="mt-2 text-xs leading-relaxed text-gray-400">
+            {{ $t(`ui.toolCalls.toolRecommendModes.${form.tool_recommend_mode}.description`) }}
+          </p>
+        </div>
         <div
           v-if="form.access_mode === 'full_access'"
           class="mt-3 rounded-lg border-l-4 border-amber-400/70 bg-amber-400/10 px-4 py-3 text-sm text-amber-200/90"
@@ -225,7 +305,7 @@
         </label>
         <select
           v-model="form.web_search.provider"
-          class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full cursor-pointer rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 focus:ring-2 focus:outline-none"
+          class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full cursor-pointer rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white transition-all duration-200 focus:ring-2 focus:outline-none"
         >
           <option value="kimi" class="bg-slate-800 text-white">Kimi /search</option>
           <option value="bocha" class="bg-slate-800 text-white">BoCha 博查</option>
@@ -266,24 +346,15 @@
                   ? $t('ui.toolCalls.kimiApiKeyPlaceholder')
                   : $t('ui.toolCalls.apiKeyPlaceholder')
             "
-            class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 focus:ring-2 focus:outline-none"
+            class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white transition-all duration-200 focus:ring-2 focus:outline-none"
           />
           <p v-if="form.web_search.provider === 'kimi'" class="mt-2 mb-2 text-sm text-gray-300">
             {{ $t("ui.toolCalls.kimiHint") }}
           </p>
         </template>
 
-        <!-- DeepSeek Responses：可切换模型；结果数量由服务端决定，不展示条数设置 -->
+        <!-- DeepSeek 独立搜索端点：需要单独 API Key -->
         <template v-if="form.web_search.provider === 'deepseek'">
-          <label class="text-brand mt-4 inline-flex items-center font-medium">
-            {{ $t("ui.toolCalls.dsModel") }}
-          </label>
-          <input
-            type="text"
-            v-model="form.web_search.model"
-            placeholder="deepseek-flash"
-            class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 focus:ring-2 focus:outline-none"
-          />
           <p class="mt-2 mb-2 text-sm text-gray-300">
             {{ $t("ui.toolCalls.dsHint") }}
           </p>
@@ -301,23 +372,21 @@
             type="text"
             v-model="form.web_search.base_url"
             placeholder="https://api.kimi.com/coding/v1/search"
-            class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 focus:ring-2 focus:outline-none"
+            class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white transition-all duration-200 focus:ring-2 focus:outline-none"
           />
         </template>
 
-        <template v-if="form.web_search.provider !== 'deepseek'">
-          <label class="text-brand mt-4 inline-flex items-center font-medium">
-            {{ $t("ui.toolCalls.maxResults") }}
-          </label>
-          <input
-            type="number"
-            v-model.number="form.web_search.max_results"
-            min="1"
-            max="20"
-            step="1"
-            class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 focus:ring-2 focus:outline-none"
-          />
-        </template>
+        <label class="text-brand mt-4 inline-flex items-center font-medium">
+          {{ $t("ui.toolCalls.maxResults") }}
+        </label>
+        <input
+          type="number"
+          v-model.number="form.web_search.max_results"
+          min="1"
+          max="20"
+          step="1"
+          class="shadow-glass focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white transition-all duration-200 focus:ring-2 focus:outline-none"
+        />
 
         <div class="flex items-center gap-3 px-1 py-2.5">
           <Toggle
@@ -342,8 +411,141 @@
           type="text"
           v-model="form.web_search.proxy_addr"
           placeholder="http://127.0.0.1:10808"
-          class="shadow-glass focus:border-brand focus:ring-brand/20 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 focus:ring-2 focus:outline-none"
+          class="shadow-glass focus:border-brand focus:ring-brand/20 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white transition-all duration-200 focus:ring-2 focus:outline-none"
         />
+      </div>
+
+      <!-- ===== 笔记与记忆 ===== -->
+      <div v-else-if="selected === 'memory'">
+        <h2 class="text-brand border-brand mb-6 border-b pb-4 text-2xl font-semibold">
+          {{ navLabel(selected) }}
+        </h2>
+        <p class="mb-4 px-1 text-sm text-gray-400">{{ $t("ui.toolCalls.otherToolsHint") }}</p>
+        <div class="flex items-center gap-3 px-1 py-2.5">
+          <Toggle
+            :checked="form.groups.memory ?? false"
+            @change="(value: boolean) => (form.groups.memory = value)"
+          />
+          <p class="text-sm text-gray-300">{{ $t("ui.toolCalls.groups.memory") }}</p>
+        </div>
+
+        <template v-if="form.groups.memory">
+          <div class="border-brand/30 bg-brand/10 my-3 rounded-xl border px-4 py-3">
+            <div class="flex items-center gap-3">
+              <Toggle
+                :checked="form.embedding.cloud_enabled"
+                @change="(value: boolean) => (form.embedding.cloud_enabled = value)"
+              />
+              <p class="text-sm text-gray-200">{{ $t("ui.toolCalls.embedding.cloudToggle") }}</p>
+            </div>
+            <p class="mt-2 text-xs text-gray-400">
+              {{ $t("ui.toolCalls.embedding.cloudToggleHint") }}
+            </p>
+            <p v-if="form.embedding.cloud_enabled" class="mt-2 text-xs text-amber-300/90">
+              {{ $t("ui.toolCalls.embedding.privacyNotice") }}
+            </p>
+          </div>
+
+          <div v-if="form.embedding.cloud_enabled" class="mt-4 grid gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-brand text-sm font-medium">{{
+                $t("ui.toolCalls.embedding.provider")
+              }}</span>
+              <select
+                v-model="form.embedding.provider"
+                class="focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white focus:ring-2 focus:outline-none"
+              >
+                <option value="openai">
+                  {{ $t("ui.toolCalls.embedding.providerOpenai") }}
+                </option>
+                <option value="gemini">
+                  {{ $t("ui.toolCalls.embedding.providerGemini") }}
+                </option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-brand text-sm font-medium">{{
+                $t("ui.toolCalls.embedding.model")
+              }}</span>
+              <input
+                v-model="form.embedding.model"
+                type="text"
+                :placeholder="$t('ui.toolCalls.embedding.modelPlaceholder')"
+                class="focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white focus:ring-2 focus:outline-none"
+              />
+            </label>
+            <label class="block">
+              <span class="text-brand text-sm font-medium">{{
+                $t("ui.toolCalls.embedding.baseUrl")
+              }}</span>
+              <input
+                v-model="form.embedding.base_url"
+                type="text"
+                :placeholder="$t('ui.toolCalls.embedding.baseUrlPlaceholder')"
+                class="focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white focus:ring-2 focus:outline-none"
+              />
+            </label>
+            <label class="block">
+              <span class="text-brand text-sm font-medium">{{
+                $t("ui.toolCalls.embedding.apiKey")
+              }}</span>
+              <input
+                v-model="form.embedding.api_key"
+                type="password"
+                class="focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white focus:ring-2 focus:outline-none"
+              />
+            </label>
+            <label class="block">
+              <span class="text-brand text-sm font-medium">{{
+                $t("ui.toolCalls.embedding.timeout")
+              }}</span>
+              <input
+                v-model.number="form.embedding.timeout_secs"
+                type="number"
+                min="5"
+                max="300"
+                step="5"
+                class="focus:border-brand focus:ring-brand/20 mt-2 w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white focus:ring-2 focus:outline-none"
+              />
+            </label>
+          </div>
+
+          <div class="mt-4 flex flex-wrap items-center gap-2">
+            <div
+              class="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-white/20"
+              @click="runEmbeddingTest"
+            >
+              {{ $t("ui.toolCalls.embedding.test") }}
+            </div>
+            <div
+              class="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-white/20"
+              @click="runEmbeddingRebuild"
+            >
+              {{ $t("ui.toolCalls.embedding.rebuild") }}
+            </div>
+            <p class="text-sm" :style="{ color: embeddingStatus.color }">
+              {{ embeddingStatus.message }}
+            </p>
+          </div>
+
+          <div v-if="warming" class="mt-3 px-1">
+            <div class="h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                class="bg-brand h-full transition-all duration-300"
+                :style="{ width: `${warmingPercent}%` }"
+              ></div>
+            </div>
+            <p class="mt-2 text-xs text-gray-400">
+              {{
+                $t("ui.toolCalls.embedding.warmingProgress", {
+                  done: warming.done,
+                  total: warming.total,
+                  failed: warming.failed,
+                })
+              }}
+            </p>
+          </div>
+        </template>
       </div>
 
       <!-- ===== 图片/视频识别 ===== -->
@@ -543,17 +745,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, onMounted } from "vue";
+import { computed, reactive, ref, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   getToolSettings,
   getToolElevationStatus,
   getToolRuntimeInfo,
+  rebuildEmbeddings,
   restartToolProcessAsAdmin,
   saveToolSettings,
+  testEmbedding,
   testWebSearch,
   TOOL_GROUP_KEYS,
+  type EmbeddingWarmingProgress,
   type ToolAccessMode,
+  type ToolRecommendMode,
   type ToolRuntimeInfo,
   type ToolSettings,
 } from "@/api/services/tool-settings";
@@ -572,9 +779,13 @@ const commandAvailable = computed(() => runtimeInfo.value?.commandAvailable ?? !
 
 const navItems = ["access", "web_search", ...TOOL_GROUP_KEYS] as const;
 const accessModes: ToolAccessMode[] = ["manual", "auto_approve", "full_access"];
+const toolRecommendModes: ToolRecommendMode[] = ["off", "agent", "rag"];
 const DEFAULT_TOOL_ROUND_LIMIT = 8;
 const MIN_TOOL_ROUND_LIMIT = 1;
 const MAX_TOOL_ROUND_LIMIT = 64;
+const DEFAULT_TOOL_CACHE_CAPACITY = 5;
+const MIN_TOOL_CACHE_CAPACITY = 1;
+const MAX_TOOL_CACHE_CAPACITY = 20;
 const DEFAULT_MEDIA_PROMPT =
   "请详细识别并描述这个媒体文件的内容；如果其中包含文字、界面、人物、物体、动作或时间顺序，请准确说明。";
 
@@ -591,7 +802,6 @@ const form = reactive<ToolSettings>({
   web_search: {
     enabled: false,
     provider: "kimi",
-    model: "deepseek-flash",
     api_key: "",
     base_url: "",
     proxy_enabled: false,
@@ -608,15 +818,74 @@ const form = reactive<ToolSettings>({
     max_output_tokens: 1024,
     default_prompt: DEFAULT_MEDIA_PROMPT,
   },
+  embedding: {
+    cloud_enabled: false,
+    provider: "openai",
+    base_url: "",
+    api_key: "",
+    model: "",
+    timeout_secs: 30,
+  },
   groups: {},
   access_mode: "manual",
   max_tool_rounds: DEFAULT_TOOL_ROUND_LIMIT,
+  tool_rag: true,
+  tool_recommend_mode: "rag",
+  tool_cache_capacity: DEFAULT_TOOL_CACHE_CAPACITY,
 });
 
 const status = reactive({ message: "", color: "#4ade80" });
 const testing = ref(false);
 const elevationStatus = ref<"checking" | "standard" | "elevated">("checking");
 const elevationRestarting = ref(false);
+
+/** 向量化自检状态与预热进度（进度来自后端事件）。 */
+const embeddingStatus = reactive({ message: "", color: "#4ade80" });
+const embeddingTesting = ref(false);
+const warming = ref<EmbeddingWarmingProgress | null>(null);
+const warmingPercent = computed(() => {
+  const progress = warming.value;
+  if (!progress || progress.total <= 0) return 0;
+  return Math.min(100, Math.round((progress.done / progress.total) * 100));
+});
+let unlistenWarming: UnlistenFn | null = null;
+
+const showEmbeddingStatus = (message: string, color = "#4ade80") => {
+  embeddingStatus.message = message;
+  embeddingStatus.color = color;
+  setTimeout(() => {
+    embeddingStatus.message = "";
+  }, 8000);
+};
+
+const runEmbeddingTest = async () => {
+  if (embeddingTesting.value) return;
+  embeddingTesting.value = true;
+  try {
+    if (!(await saveSettings())) return;
+    const result = await testEmbedding();
+    showEmbeddingStatus(
+      t("ui.toolCalls.embedding.testSuccess", {
+        backend: result.backend,
+        dimension: result.dimension,
+        elapsed: result.elapsedMs,
+      }),
+    );
+  } catch (error: any) {
+    showEmbeddingStatus(t("ui.toolCalls.embedding.testFailed", { message: String(error) }), "red");
+  } finally {
+    embeddingTesting.value = false;
+  }
+};
+
+const runEmbeddingRebuild = async () => {
+  try {
+    await rebuildEmbeddings();
+    showEmbeddingStatus(t("ui.toolCalls.embedding.rebuildStarted"), "#7dd3fc");
+  } catch (error: any) {
+    showEmbeddingStatus(t("ui.toolCalls.embedding.testFailed", { message: String(error) }), "red");
+  }
+};
 
 const loadRuntimeInfo = async () => {
   try {
@@ -660,6 +929,13 @@ const normalizeToolRoundLimit = () => {
     : DEFAULT_TOOL_ROUND_LIMIT;
 };
 
+const normalizeToolCacheCapacity = () => {
+  const value = Number(form.tool_cache_capacity);
+  form.tool_cache_capacity = Number.isFinite(value)
+    ? Math.min(MAX_TOOL_CACHE_CAPACITY, Math.max(MIN_TOOL_CACHE_CAPACITY, Math.round(value)))
+    : DEFAULT_TOOL_CACHE_CAPACITY;
+};
+
 const normalizeMediaSettings = () => {
   const clamp = (value: unknown, fallback: number, min: number, max: number) => {
     const parsed = Number(value);
@@ -672,10 +948,19 @@ const normalizeMediaSettings = () => {
   if (!form.media_file.default_prompt.trim()) form.media_file.default_prompt = DEFAULT_MEDIA_PROMPT;
 };
 
+const normalizeEmbeddingSettings = () => {
+  const timeout = Number(form.embedding.timeout_secs);
+  form.embedding.timeout_secs = Number.isFinite(timeout)
+    ? Math.min(300, Math.max(5, Math.round(timeout)))
+    : 30;
+};
+
 const saveSettings = async (): Promise<boolean> => {
   try {
     normalizeToolRoundLimit();
+    normalizeToolCacheCapacity();
     normalizeMediaSettings();
+    normalizeEmbeddingSettings();
     if (android) {
       form.groups.command = false;
     }
@@ -754,15 +1039,44 @@ onMounted(async () => {
     const settings = await getToolSettings();
     Object.assign(form.web_search, settings.web_search);
     Object.assign(form.media_file, settings.media_file ?? {});
+    Object.assign(form.embedding, settings.embedding ?? {});
     Object.assign(form.groups, settings.groups ?? {});
     form.access_mode = settings.access_mode ?? "manual";
     form.max_tool_rounds = settings.max_tool_rounds ?? DEFAULT_TOOL_ROUND_LIMIT;
+    form.tool_rag = settings.tool_rag ?? true;
+    form.tool_recommend_mode = settings.tool_recommend_mode ?? "rag";
+    form.tool_cache_capacity = settings.tool_cache_capacity ?? DEFAULT_TOOL_CACHE_CAPACITY;
     normalizeToolRoundLimit();
+    normalizeToolCacheCapacity();
     normalizeMediaSettings();
+    normalizeEmbeddingSettings();
     await loadRuntimeInfo();
     if (isWindows()) await refreshElevationStatus();
   } catch (error) {
     console.error("加载工具配置失败:", error);
   }
+
+  // 预热进度由后端事件推送：保存影响向量的配置后会自动开跑，手动重建也走这里。
+  try {
+    unlistenWarming = await listen<EmbeddingWarmingProgress>("embedding:warming", (event) => {
+      const payload = event.payload;
+      warming.value = payload.finished ? null : payload;
+      if (payload.finished) {
+        showEmbeddingStatus(
+          t("ui.toolCalls.embedding.warmingFinished", {
+            failed: payload.failed,
+          }),
+          payload.failed > 0 ? "#fbbf24" : "#4ade80",
+        );
+      }
+    });
+  } catch (error) {
+    console.warn("监听向量化预热事件失败:", error);
+  }
+});
+
+onUnmounted(() => {
+  unlistenWarming?.();
+  unlistenWarming = null;
 });
 </script>

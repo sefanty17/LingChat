@@ -1,12 +1,15 @@
 <template>
-  <div class="relative h-full w-full overflow-hidden" :class="panelClass">
+  <!-- 根节点的底色只做兜底：图片加载失败时窗口仍是不透明的。
+       isolate 必不可少，否则 z-[-2] 的背景层会落到外层层叠上下文里，被这层底色完全盖住 -->
+  <div class="relative isolate h-full w-full overflow-hidden bg-[#f5efe6]">
     <MainChat v-if="currentPage === 'gameMainView'" />
-    <Settings v-else-if="currentPage === 'settings'" />
-    <Save v-else-if="currentPage === 'save'" />
+    <!-- 设置面板的挂载时机单独用 settingsMounted 控制：关闭时要等退场动画播完再卸载 -->
+    <Settings v-if="settingsMounted" slide-from-right @closed="onSettingsClosed" />
 
     <!-- 背景层（最底层） -->
     <div
-      class="absolute top-0 left-[-10%] z-[-2] h-full w-[120%] bg-[url('../../assets/images/background2.png')] bg-cover bg-center will-change-transform"
+      class="absolute top-0 left-[-10%] z-[-2] h-full w-[120%] bg-cover bg-center will-change-transform"
+      :style="{ backgroundImage: `url(${background2})` }"
       ref="bgRef"
     ></div>
 
@@ -20,70 +23,88 @@
       :stars-fps="starsFps"
     />
 
-    <!-- 人物图层（位于星星之上，菜单之下） -->
+    <!-- 人物图层（位于星星之上，菜单之下）
+         贴底而非居中：立绘是横构图（2560x1446），竖屏手机由 max-w-full 先卡住，
+         居中会在屏幕底部留下大片背景空隙（导航条处最明显），贴底让人物落到屏底 -->
     <img
-      class="pointer-events-none absolute top-1/2 left-1/2 z-3 h-full w-full transform-[translate(-50%,-50%)] object-cover will-change-transform"
+      class="pointer-events-none absolute bottom-0 left-1/2 z-3 max-h-full max-w-full transform-[translate(-50%,0)] will-change-transform select-none"
       ref="charRef"
-      src="../../assets/images/alona.png"
+      :src="alona"
       :alt="$t('views.mainMenu.characterAlt')"
+      draggable="false"
+      @contextmenu.prevent
     />
 
+    <!-- 设置/存档页期间的背景压暗层。z-4 位于人物层(z-3)与菜单列(z-5)之间，
+         只压暗背景与人物，退场中的菜单保持清晰。
+         跟随 currentPage 而不是 settingsMounted：后者要等面板退场动画播完才置否，
+         会让压暗在面板划走之后还残留一段 -->
+    <Transition name="menu-dim">
+      <div
+        v-if="currentPage !== 'mainMenu'"
+        class="pointer-events-none absolute inset-0 z-4 bg-black/10"
+      ></div>
+    </Transition>
+
     <!-- 菜单容器，绑定鼠标移动和移出事件实现视差 -->
-    <StartPage
-      v-if="currentPage === 'mainMenu'"
-      ref="containerRef"
-      @mousemove="handleMouseMove"
-      @mouseleave="handleMouseLeave"
-    >
-      <!-- 主菜单 -->
-      <Transition name="slide-left">
-        <MainMenuOptions
-          v-if="menuState === 'main'"
-          @start-game="showGameModeMenu"
-          @open-settings="handleOpenSettings"
-          @open-credits="handleOpenCredits"
-          @open-workshop="showWorkshopMenu"
-          @open-script-editor="() => router.push('/script-editor')"
-        />
-      </Transition>
+    <Transition name="menu-page">
+      <StartPage
+        v-if="currentPage === 'mainMenu'"
+        class="select-none"
+        @mousemove="handleMouseMove"
+        @mouseleave="handleMouseLeave"
+      >
+        <!-- 主菜单 -->
+        <Transition name="slide-left">
+          <MainMenuOptions
+            v-if="menuState === 'main'"
+            @start-game="showGameModeMenu"
+            @open-settings="handleOpenSettings"
+            @open-credits="handleOpenCredits"
+            @open-workshop="showWorkshopMenu"
+          />
+        </Transition>
 
-      <!-- 游戏模式菜单 -->
-      <Transition name="slide-right">
-        <GameModeOptions
-          v-if="menuState === 'gameMode'"
-          @back="backToMainMenu"
-          @open-scripts="showScriptModeMenu"
-          :loadingScripts="loadingScripts"
-          :scripts="scripts"
-        />
-      </Transition>
+        <!-- 游戏模式菜单 -->
+        <Transition name="slide-right">
+          <GameModeOptions
+            v-if="menuState === 'gameMode'"
+            @back="backToMainMenu"
+            @open-scripts="showScriptModeMenu"
+            :loadingScripts="loadingScripts"
+            :scripts="scripts"
+          />
+        </Transition>
 
-      <!-- 剧本模式菜单 -->
-      <Transition name="slide-right">
-        <ScriptModeOptions
-          v-if="menuState === 'scriptMode'"
-          @back="showGameModeMenu"
-          :scripts="scripts"
-        />
-      </Transition>
+        <!-- 剧本模式菜单 -->
+        <Transition name="slide-right">
+          <ScriptModeOptions
+            v-if="menuState === 'scriptMode'"
+            @back="showGameModeMenu"
+            :scripts="scripts"
+          />
+        </Transition>
 
-      <!-- 创意工坊菜单 -->
-      <Transition name="slide-right">
-        <WorkshopOptions
-          v-if="menuState === 'workshop'"
-          @back="backToMainMenu"
-          :scripts="scripts"
-        />
-      </Transition>
+        <!-- 创意工坊菜单 -->
+        <Transition name="slide-right">
+          <WorkshopOptions
+            v-if="menuState === 'workshop'"
+            @back="backToMainMenu"
+            :scripts="scripts"
+          />
+        </Transition>
 
-      <StartLogo @click="goToGithub" />
-    </StartPage>
+        <StartLogo @click="goToGithub" />
+      </StartPage>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
 import { getScriptList, type ScriptSummary } from "@/api/services/script-info";
-import { computed, onMounted, ref, watch } from "vue";
+import alona from "@/assets/images/alona.png";
+import background2 from "@/assets/images/background2.png";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useSettingsStore } from "../../stores/modules/settings";
@@ -103,6 +124,10 @@ const settingsStore = useSettingsStore();
 
 // 页面与菜单状态
 const currentPage = ref("mainMenu");
+// 设置面板是否挂载。与 currentPage 分开是因为关闭时面板要留到退场动画播完才卸载，
+// 而菜单需要立刻回场与它重叠
+const settingsMounted = ref(false);
+let settingsMountFrame: number | null = null;
 const menuState = ref<"main" | "gameMode" | "scriptMode" | "workshop">("main");
 const scripts = ref<ScriptSummary[]>([]);
 const loadingScripts = ref(false);
@@ -115,20 +140,11 @@ const transientSuspend = ref(false);
 const effectiveStarsEnabled = computed(() => starsEnabled.value && !transientSuspend.value);
 const effectiveMeteorsEnabled = computed(() => meteorsEnabled.value && !transientSuspend.value);
 const parallaxEnabled = computed(() => !transientSuspend.value);
-const panelClass = computed(() => {
-  if (currentPage.value === "mainMenu") return "";
-  // Windows 快照态：不做实时模糊，静态快照已在 SettingsPanel 内
-  return "before:content-[''] before:absolute before:inset-0 before:backdrop-blur-[12px] before:backdrop-brightness-90 before:z-10 before:pointer-events-none";
-});
-let settingsSnapshotSession: number | null = null;
 
 // DOM Refs
-const containerRef = ref<HTMLElement | null>(null);
 const bgRef = ref<HTMLElement | null>(null);
 const charRef = ref<HTMLElement | null>(null);
 const starsLayerRef = ref<HTMLElement | null>(null);
-
-const Save = Settings;
 
 /* ================== 菜单逻辑 ================== */
 function showGameModeMenu() {
@@ -150,28 +166,9 @@ function goToGithub() {
   window.open("https://github.com/SlimeBoyOwO/LingChat", "_blank");
 }
 
-async function handleOpenSettings(tab?: string) {
-  // 后台执行隐藏与捕获，不阻塞设置页打开
-  (async () => {
-    try {
-      // 立即打开设置（按钮仍 hidden，不会被拍）
-      uiStore.toggleSettings(true);
-      if (tab === "save") {
-        currentPage.value = "save";
-        uiStore.setSettingsTab("save");
-      } else {
-        currentPage.value = "settings";
-      }
-    } catch (e) {
-      console.warn("[MainMenu] snapshot capture error:", e);
-    } finally {
-      // 截图完成后才暂停动画，需守卫：若用户已快速关闭设置则不再暂停
-      if (uiStore.showSettings && currentPage.value !== "mainMenu") {
-        transientSuspend.value = true;
-      }
-    }
-  })();
-
+function handleOpenSettings(tab?: string) {
+  // 与菜单列退场、背景压暗层同帧发生：菜单列由外层 Transition 向左滑出，
+  // 设置面板自身从右滑入（slide-from-right），背景在 0.3s 内渐暗
   uiStore.toggleSettings(true);
   if (tab === "save") {
     currentPage.value = "save";
@@ -179,16 +176,38 @@ async function handleOpenSettings(tab?: string) {
   } else {
     currentPage.value = "settings";
   }
+  // 面板推迟一帧挂载：先让菜单列开始离场，避免整块 DOM 插入与过渡钩子里的
+  // 强制同步布局挤在同一帧
+  if (settingsMountFrame !== null) cancelAnimationFrame(settingsMountFrame);
+  settingsMountFrame = requestAnimationFrame(() => {
+    settingsMountFrame = null;
+    if (uiStore.showSettings) settingsMounted.value = true;
+  });
+  // 设置页常驻期间暂停星星与流星
+  transientSuspend.value = true;
 }
+
+// 面板退场动画播完后才真正卸载，并恢复主菜单的粒子动画
+function onSettingsClosed() {
+  if (settingsMountFrame !== null) {
+    cancelAnimationFrame(settingsMountFrame);
+    settingsMountFrame = null;
+  }
+  settingsMounted.value = false;
+  if (transientSuspend.value) transientSuspend.value = false;
+}
+
+onUnmounted(() => {
+  if (settingsMountFrame !== null) cancelAnimationFrame(settingsMountFrame);
+});
 
 watch(
   () => uiStore.showSettings,
   (newVal) => {
-    if (!newVal && (currentPage.value === "settings" || currentPage.value === "save")) {
+    // 菜单立刻回场（左滑进入），与面板向右退场重叠；面板卸载见 onSettingsClosed
+    if (!newVal && currentPage.value !== "mainMenu") {
       currentPage.value = "mainMenu";
       menuState.value = "main";
-      // 恢复动画（按最新持久值）
-      if (transientSuspend.value) transientSuspend.value = false;
     }
   },
 );
@@ -262,10 +281,12 @@ onMounted(() => {
   transition: all 0.4s cubic-bezier(0.7, 0, 0.2, 1);
 }
 
-/* Remove leaving elements from flex flow immediately to prevent layout jump */
+/* Remove leaving elements from flex flow immediately to prevent layout jump；
+   退场期间不再接收点击 */
 .slide-left-leave-active,
 .slide-right-leave-active {
   position: absolute;
+  pointer-events: none;
 }
 
 .slide-left-enter-from,
@@ -277,6 +298,35 @@ onMounted(() => {
 .slide-right-enter-from,
 .slide-right-leave-to {
   transform: translateX(120%);
+  opacity: 0;
+}
+
+/* 菜单列整体退场：观感与开始游戏进二级菜单一致地左滑淡出。
+   只定义 leave 不定义 enter —— 回场时若整列也位移，会与内部菜单自身的
+   slide-left 叠加成两倍行程；即时出现，回场动感交给内部菜单与压暗层渐隐 */
+.menu-page-leave-active {
+  transition: all 0.4s cubic-bezier(0.7, 0, 0.2, 1);
+  position: absolute;
+  pointer-events: none;
+}
+
+.menu-page-leave-to {
+  transform: translateX(-120%);
+  opacity: 0;
+}
+
+/* 设置页期间的背景压暗层。进场 0.3s 与设置面板自带遮罩同步；
+   离场 0.42s 与面板向右滑出的时长一致，两者同时结束，不留残余 */
+.menu-dim-enter-active {
+  transition: opacity 0.3s ease;
+}
+
+.menu-dim-leave-active {
+  transition: opacity 0.42s ease;
+}
+
+.menu-dim-enter-from,
+.menu-dim-leave-to {
   opacity: 0;
 }
 </style>

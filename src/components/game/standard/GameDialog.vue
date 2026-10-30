@@ -6,7 +6,6 @@
         isHidden,
       'max-h-[40dvh]': !uiStore.isNarrowScreen,
     }"
-    :style="dialogWrapperStyle"
     @wheel="handleWheelHistory"
   >
     <div :style="{ width: containerWidth + '%' }" class="relative">
@@ -25,13 +24,12 @@
                 :class="{
                   'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap': uiStore.isNarrowScreen,
                 }"
-                :style="{ color: dialogTextColorValue }"
               >
                 <div id="character">{{ uiStore.showCharacterTitle }}</div>
               </div>
               <div
                 v-show="!uiStore.isNarrowScreen"
-                class="font-[inherit] text-xl font-bold text-[#6eb4ff] text-shadow-[inherit]"
+                class="font-[inherit] text-xl font-bold whitespace-nowrap text-[#6eb4ff] text-shadow-[inherit]"
               >
                 <div id="character-sub">{{ uiStore.showCharacterSubtitle }}</div>
               </div>
@@ -65,7 +63,6 @@
                     :title="$t('game.dialog.sceneSettings')"
                     @click="openSceneSettings"
                   ></Button>
-                  <!--
                   <Button
                     type="nav"
                     icon="hand"
@@ -73,7 +70,6 @@
                     @click="toggleTouchMode"
                     @contextmenu.prevent="exitTouchMode"
                   ></Button>
-                  -->
                   <Button
                     type="nav"
                     icon="history"
@@ -97,10 +93,43 @@
 
                   <Button
                     type="nav"
+                    icon="upload"
+                    :title="$t('game.dialog.quickSave')"
+                    @click="quickSave"
+                  ></Button>
+                  <Button
+                    type="nav"
+                    icon="download"
+                    :title="$t('game.dialog.quickLoad')"
+                    @click="openSaveSettings"
+                  ></Button>
+
+                  <Button
+                    type="nav"
                     icon="close"
                     :title="$t('game.dialog.closeDialog')"
                     @click="removeDialog"
                   ></Button>
+                </div>
+
+                <!-- 附图指示：贴图/截图后常驻；读取中流动，完成后满格，× 移除附图 -->
+                <div
+                  v-if="pasteLoading || hasScreenshot"
+                  class="mt-1.5 flex items-center gap-2 rounded-md bg-white/8 px-2.5 py-1.5"
+                >
+                  <div class="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      v-if="pasteLoading"
+                      class="paste-progress-bar h-full w-1/3 rounded-full bg-cyan-400"
+                    ></div>
+                    <div v-else class="h-full w-full rounded-full bg-cyan-400/70"></div>
+                  </div>
+                  <button
+                    class="shrink-0 cursor-pointer border-none bg-transparent p-0.5 text-white/50 transition-colors hover:text-white"
+                    @click="clearScreenshot"
+                  >
+                    <X :size="14" />
+                  </button>
                 </div>
               </div>
             </template>
@@ -162,6 +191,18 @@
                 @start="onMobileMenuAction(startScreenshot)"
                 @clear="onMobileMenuAction(clearScreenshot)"
               />
+              <Button
+                type="nav"
+                icon="download"
+                :title="$t('game.dialog.quickSave')"
+                @click="onMobileMenuAction(quickSave)"
+              ></Button>
+              <Button
+                type="nav"
+                icon="upload"
+                :title="$t('game.dialog.quickLoad')"
+                @click="onMobileMenuAction(openSaveSettings)"
+              ></Button>
             </div>
           </div>
         </Transition>
@@ -169,12 +210,23 @@
         <!-- 分割线：青蓝色发光线条，亮段从左向右流动（同源桌宠外框 sweep-glow-ring） -->
         <div class="dialog-divider-glow my-1.5"></div>
 
+        <!-- 关系未填时的提示条：位于输入区上方，点击打开引导模态。
+             背景保持不透明，避免分割线/背景图从半透明底色里透出来切断文字。 -->
+        <button
+          v-if="!relationGuardReady"
+          class="relative z-10 mx-auto my-1.5 block max-w-[92%] cursor-pointer rounded-full border border-amber-300/50 bg-amber-950 px-4 py-1.5 text-center text-xs font-medium text-amber-50 shadow-lg shadow-black/40 transition-colors hover:bg-amber-900"
+          @click="openRelationModal"
+        >
+          {{ relationTipText }}
+        </button>
+
         <!-- 输入区 -->
         <div
           class="my-1.25 flex min-h-10 w-full resize-none flex-col border-none bg-transparent text-xl font-bold whitespace-pre-line text-white transition-all duration-300 outline-none"
         >
-          <!-- AI 回复显示区（仅回应状态可见；标准/内联模式共用，逐字符淡入+上浮）。
-               两子容器：台词区白字 + 动作区灰字，颜色由容器决定，字符只负责动画 span -->
+          <!-- AI 回复显示区（仅回应状态可见，逐字符淡入+上浮）。
+               两子容器：台词区白字 + 动作区灰字，颜色由容器决定，字符只负责动画 span。
+               动作文本与台词同时显示，各由一个打字机并行打字 -->
           <div
             v-show="currentStatus === 'responding'"
             ref="inlineDisplayRef"
@@ -183,14 +235,10 @@
             @keydown.enter.exact.prevent="sendOrContinue"
             @click="sendOrContinue"
           >
-            <!-- 台词区：白字（内联模式台词 / 标准模式正文） -->
+            <!-- 台词区：白字 -->
             <div ref="dialogueLineRef" class="whitespace-pre-line text-white"></div>
-            <!-- 动作区：灰字；标准模式两段式动作阶段为斜体小字 -->
-            <div
-              ref="motionLineRef"
-              class="whitespace-pre-line text-[#9ca3af]"
-              :class="{ 'text-base italic': isShowingMotionText }"
-            ></div>
+            <!-- 动作区：灰字（独立打字机，与台词并行） -->
+            <div ref="motionLineRef" class="whitespace-pre-line text-[#9ca3af]"></div>
           </div>
 
           <!-- 输入框 textarea（非回应状态：思考/输入/展示阶段） -->
@@ -202,7 +250,8 @@
             :placeholder="placeholderText"
             v-model="inputMessage"
             @keydown.enter.exact.prevent="sendOrContinue"
-            :readonly="!isInputEnabled"
+            @paste="onPasteImage"
+            :readonly="!inputEnabled"
           ></textarea>
         </div>
       </div>
@@ -210,7 +259,7 @@
       <button
         id="sendButton"
         class="absolute right-0 bottom-0 translate-x-full cursor-pointer rounded-[5px] border-none bg-transparent px-2 py-2 font-[inherit] text-sm font-bold text-[#04bcff] transition-all duration-300 text-shadow-[inherit] hover:bg-transparent hover:text-[rgba(136,255,251,0.827)] disabled:cursor-not-allowed disabled:bg-[#333] disabled:opacity-70"
-        :disabled="isSending"
+        :disabled="isSending || !relationReady"
         @click="sendOrContinue"
       >
         ▼
@@ -222,12 +271,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { invoke } from "@tauri-apps/api/core";
+import { X } from "@lucide/vue";
 import { useTypeWriter } from "../../../composables/ui/useTypeWriter";
-import { setMobileMenuOpen, useAsrInput } from "../../../composables/useAsrInput";
+import { setMobileMenuOpen, useAsrInput } from "../../../composables/asr";
 import { useChatInput } from "../../../composables/chat/useChatInput";
+import { useRelationGuard } from "../../../composables/chat/useRelationGuard";
 import { useDialogAdvance } from "../../../composables/chat/useDialogAdvance";
 import { useDialogStatus } from "../../../composables/chat/useDialogStatus";
-import { useDialogAppearance } from "../../../composables/useDialogAppearance";
+import { useDialogInteraction } from "../../../composables/useDialogInteraction";
 import { useMicControl } from "../../../composables/useMicControl";
 import { useScreenshot } from "../../../composables/useScreenshot";
 import { dialogueMerge } from "../../../core/events/dialogue-merge";
@@ -243,7 +295,13 @@ import { Button } from "../../base";
 import ScreenshotButton from "./ScreenshotButton.vue";
 
 const { t } = useI18n();
-const isShowingMotionText = ref(false);
+// 关系未就绪（角色卡或身份卡的关系栏为空）时输入框只读、发送按钮置灰
+const props = withDefaults(
+  defineProps<{
+    relationReady?: boolean;
+  }>(),
+  { relationReady: true },
+);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const inlineDisplayRef = ref<HTMLDivElement | null>(null);
 const gameStore = useGameStore();
@@ -251,14 +309,13 @@ const uiStore = useUIStore();
 const dialogStore = useDialogStore();
 const settingsStore = useSettingsStore();
 
-// Dialog appearance managed by composable: useDialogAppearance
-const { isHidden, hide, dialogWrapperStyle, dialogTextColorValue, handleWheelHistory } =
-  useDialogAppearance({
-    openHistory: () => {
-      uiStore.toggleSettings(true);
-      uiStore.setSettingsTab("history");
-    },
-  });
+// 隐藏状态与滚轮/空格交互由 composable 管理
+const { isHidden, hide, handleWheelHistory } = useDialogInteraction({
+  openHistory: () => {
+    uiStore.toggleSettings(true);
+    uiStore.setSettingsTab("history");
+  },
+});
 
 // 移动端按钮折叠状态（但是基于长宽比判断）
 const isMobile = ref(uiStore.aspectRatio <= 1);
@@ -285,11 +342,15 @@ const { micEnabled, micTitle, micIconName, toggleRecording } = useMicControl();
 // 失败提示由调用方提供：桌宠侧静默，主界面弹 alert。
 const {
   hasScreenshot,
+  screenshotBase64,
   init: initScreenshot,
   destroy: destroyScreenshot,
   start: startScreenshotRaw,
   clear: clearScreenshot,
 } = useScreenshot();
+
+// 粘贴图片读取中（进度条显隐）
+const pasteLoading = ref(false);
 
 const startScreenshot = () =>
   startScreenshotRaw({
@@ -312,6 +373,44 @@ const openSceneSettings = () => {
   uiStore.setSettingsTab("background");
 };
 
+// 存档页：快速读档直接打开它；快速存档无档可更新时也把用户导到这里建新档
+const openSaveSettings = () => {
+  uiStore.toggleSettings(true);
+  uiStore.setSettingsTab("save");
+};
+
+// 快速存档：本次会话已绑定存档就直接覆盖它，否则先去存档页建一个
+const quickSave = async () => {
+  const saveId = gameStore.currentSaveId;
+  if (saveId === null) {
+    openSaveSettings();
+    uiStore.showNotification({
+      type: "warning",
+      title: t("settings.save.msg.warnTitle"),
+      message: t("game.dialog.quickSaveNoSave"),
+      skipTipsCheck: true,
+    });
+    return;
+  }
+  try {
+    await invoke("update_save", { saveId, ...(await gameStore.collectSaveProgress()) });
+    uiStore.showNotification({
+      type: "success",
+      title: t("settings.save.msg.updateSuccessTitle"),
+      message: t("settings.save.msg.updateSuccessMsg"),
+      skipTipsCheck: true,
+    });
+  } catch (e: any) {
+    console.error("快速存档失败:", e);
+    uiStore.showNotification({
+      type: "error",
+      title: t("settings.save.msg.overwriteFailTitle"),
+      message: typeof e === "string" ? e : e.message || t("settings.save.msg.unknownError"),
+      skipTipsCheck: true,
+    });
+  }
+};
+
 // 移动端菜单操作：执行动作后自动收起菜单
 const onMobileMenuAction = (action: () => void) => {
   action();
@@ -326,29 +425,25 @@ const motionLineRef = ref<HTMLDivElement | null>(null);
 type DisplaySegment = { kind: "dialogue" | "motion"; text: string };
 let segments: DisplaySegment[] = [];
 
-// 把一句台词构造成分段：内联模式台词+动作两段都进，标准模式只进台词段
-// （动作由两段式单独处理，见 continueDialog）。
+// 把一句台词构造成分段：台词段 + 动作段（动作与台词同时显示）
 function buildSegments(line: string): DisplaySegment[] {
   const segs: DisplaySegment[] = [{ kind: "dialogue", text: line }];
-  if (settingsStore.text.inlineMotionText && uiStore.showCharacterMotionText) {
+  if (uiStore.showCharacterMotionText) {
     segs.push({ kind: "motion", text: uiStore.showCharacterMotionText });
   }
   return segs;
 }
 
-// charReveal 只负责「打字内容」：内联模式=台词段（动作段由独立动作打字机负责）；
-// 标准模式=全部段（动作由 continueDialog Phase 2 走 charReveal 打字）。台词段间空格已在 append 时烙进段文本。
+// 台词打字机只负责「台词段」的打字内容，动作段由独立动作打字机负责。
+// 台词段间空格已在 append 时烙进段文本。
 function typedText(segs: DisplaySegment[] = segments): string {
-  if (settingsStore.text.inlineMotionText) {
-    return segs
-      .filter((s) => s.kind === "dialogue")
-      .map((s) => s.text)
-      .join("");
-  }
-  return segs.map((s) => s.text).join("");
+  return segs
+    .filter((s) => s.kind === "dialogue")
+    .map((s) => s.text)
+    .join("");
 }
 
-// 动作区第二打字机（仅内联模式）：动作文本独立逐字打字，保留打字机效果。
+// 动作区第二打字机：动作文本独立逐字打字，保留打字机效果。
 // 单独一个 TypeWriter + charReveal，不混进台词打字机流——replace 模式「旧动作被
 // 清掉」使文本非单调变化，单流 charReveal 的 prev 前缀去重无法处理。append 用
 // append() 接续（| 分隔），replace 用 stop + start 清空重打。
@@ -381,7 +476,7 @@ function stopMotionTyping() {
 // 追加路径。解决快速连发时 i+2/i+3 在 i+1 处理前就入队、被 addEvent 的队列守卫
 // 挡住、导致最多只融合两句的问题。
 function rearmNextMerge(appendedLine: string) {
-  if (!settingsStore.text.inlineMotionText || settingsStore.text.mergeLineThreshold <= 0) {
+  if (settingsStore.text.mergeLineThreshold <= 0) {
     return;
   }
   const next = eventQueue.peek();
@@ -404,40 +499,25 @@ function rearmNextMerge(appendedLine: string) {
   dialogueMerge.armedRoleId = next.roleId;
 }
 
-// 逐字符淡入+上浮渲染器。颜色不再由字符决定，改由 route 把字符插到对应容器；
-// append 续打时下标在整个累积文本上连续，route 按全局下标累计偏移定位。
+// 逐字符淡入+上浮渲染器。颜色不再由字符决定，改由容器决定：台词打字机的字符
+// 一律进台词区（动作区由独立动作打字机负责）。
 const charReveal = createCharRevealWriter({
   charHtml: charRevealCharHtml,
-  route: (index) => {
-    // 内联模式：打字内容只含台词段，一律进台词区；动作区由独立动作打字机负责
-    if (settingsStore.text.inlineMotionText) return dialogueLineRef.value;
-    let offset = 0;
-    for (const seg of segments) {
-      if (index < offset + seg.text.length) {
-        return seg.kind === "motion" ? motionLineRef.value : dialogueLineRef.value;
-      }
-      offset += seg.text.length;
-    }
-    return dialogueLineRef.value;
-  },
+  route: () => dialogueLineRef.value,
   // 清空子容器内容、保留容器结构——清外层会把子容器节点销毁，模板 ref 指向
   // 脱离文档的旧节点，之后字符全插进不可见处。
-  // 内联模式动作区由独立动作打字机管理，这里只清台词区（台词 typewriter 首个
-  // tick 也会触发一次 clear，若清动作区会把动作打字机刚渲染的内容抹掉）；
-  // 标准模式动作区走 charReveal 打字，仍需清空（continueDialog Phase 2 前）。
+  // 动作区由独立动作打字机管理，这里只清台词区（台词打字机首个 tick 也会触发
+  // 一次 clear，若清动作区会把动作打字机刚渲染的内容抹掉）。
   clear: () => {
     if (dialogueLineRef.value) dialogueLineRef.value.innerHTML = "";
-    if (!settingsStore.text.inlineMotionText && motionLineRef.value) {
-      motionLineRef.value.innerHTML = "";
-    }
   },
 });
 
-// 清空回复显示区并重置渲染器增量状态（新台词 / 两段式动作阶段切换前调用）
+// 清空回复显示区并重置渲染器增量状态（新台词前调用）
 function resetResponseDisplay() {
   if (inlineDisplayRef.value) charReveal.clear(inlineDisplayRef.value);
-  // 内联模式动作区由动作打字机管理：一并停止清空（标准模式动作走 charReveal，上面的 clear 已清掉）
-  if (settingsStore.text.inlineMotionText) stopMotionTyping();
+  // 动作区由动作打字机管理：一并停止清空
+  stopMotionTyping();
 }
 
 // 立即把当前台词写入显示元素（不经过打字动画；供挂载恢复使用）
@@ -446,21 +526,18 @@ function renderLineInstant(line: string) {
   segments = buildSegments(line);
   if (inlineDisplayRef.value) {
     charReveal.renderInstant(inlineDisplayRef.value, typedText());
-    // 内联模式动作区瞬时恢复（重挂载不打字）
-    if (settingsStore.text.inlineMotionText) {
-      stopMotionTyping();
-      const motionText = uiStore.showCharacterMotionText;
-      if (motionText && motionLineRef.value) {
-        motionReveal.renderInstant(motionLineRef.value, motionText);
-      } else if (motionLineRef.value) {
-        motionLineRef.value.innerHTML = "";
-      }
+    // 动作区瞬时恢复（重挂载不打字）
+    stopMotionTyping();
+    const motionText = uiStore.showCharacterMotionText;
+    if (motionText && motionLineRef.value) {
+      motionReveal.renderInstant(motionLineRef.value, motionText);
+    } else if (motionLineRef.value) {
+      motionLineRef.value.innerHTML = "";
     }
   }
 }
 
-// 回复显示区 TypeWriter（标准/内联模式共用；逐字符渲染由 charReveal 负责；
-// appendTyping 用于台词合并续打）
+// 台词区 TypeWriter（逐字符渲染由 charReveal 负责；appendTyping 用于台词合并续打）
 const { startTyping, stopTyping, isTyping, finishTyping, appendTyping } = useTypeWriter(
   inlineDisplayRef,
   (text) => {
@@ -534,6 +611,26 @@ const { placeholderState, isInputEnabled } = useDialogStatus({
   },
 });
 
+// 关系未就绪时输入框一并锁住（与 ASR 占用输入框同一层语义）
+const inputEnabled = computed(() => isInputEnabled.value && props.relationReady);
+
+// 关系就绪门提示条：搬到输入区上方，文案列出所有缺关系的角色
+const {
+  ready: relationGuardReady,
+  blockedRoles: relationBlockedRoles,
+  openModal: openRelationModal,
+} = useRelationGuard();
+
+const relationTipText = computed(() => {
+  const names = relationBlockedRoles.value
+    .map((item) => gameStore.getGameRole(item.roleId)?.roleName)
+    .filter((name): name is string => !!name);
+  if (!names.length) {
+    return t("game.relationGuard.tipBar", { name: uiStore.showCharacterTitle });
+  }
+  return t("game.relationGuard.tipBarMulti", { names: names.join("、") });
+});
+
 // 占位符：状态判定来自共享的 useDialogStatus，这里只负责主界面自己的文案
 const placeholderText = computed(() => {
   const s = placeholderState.value;
@@ -575,24 +672,20 @@ watch([() => uiStore.showCharacterLine, () => gameStore.currentStatus], ([newLin
       appendMerged("dialogue", newLine, " ");
       // 动作段记账 + 动作区续打（独立于台词打字机）。hadPriorMotion 必须在
       // segments.push 之前算——push 后新动作段已在 segments 里，会误判成已有前序动作。
-      const hadPriorMotion = settingsStore.text.inlineMotionText
-        ? segments.some((s) => s.kind === "motion")
-        : false;
-      if (settingsStore.text.inlineMotionText) {
-        const motionText = uiStore.showCharacterMotionText;
-        if (settingsStore.text.mergeMotionMode === "replace") {
-          // 独立显示模式：清掉旧动作段，只保留本次动作（无动作则动作区清空）
-          segments = segments.filter((s) => s.kind !== "motion");
-          if (motionText) newSegs.push({ kind: "motion", text: motionText });
-          // 清空旧动作并重打本次动作（无动作则清空动作区）
-          stopMotionTyping();
-          if (motionText) startMotionTyping(motionText, uiStore.typeWriterSpeed);
-        } else if (motionText) {
-          // 接在后面显示：动作段之间用 | 分隔，动作区接续打字
-          appendMerged("motion", motionText, " | ");
-          if (hadPriorMotion) appendMotionTyping(" | " + motionText);
-          else startMotionTyping(motionText, uiStore.typeWriterSpeed);
-        }
+      const hadPriorMotion = segments.some((s) => s.kind === "motion");
+      const motionText = uiStore.showCharacterMotionText;
+      if (settingsStore.text.mergeMotionMode === "replace") {
+        // 独立显示模式：清掉旧动作段，只保留本次动作（无动作则动作区清空）
+        segments = segments.filter((s) => s.kind !== "motion");
+        if (motionText) newSegs.push({ kind: "motion", text: motionText });
+        // 清空旧动作并重打本次动作（无动作则清空动作区）
+        stopMotionTyping();
+        if (motionText) startMotionTyping(motionText, uiStore.typeWriterSpeed);
+      } else if (motionText) {
+        // 接在后面显示：动作段之间用 | 分隔，动作区接续打字
+        appendMerged("motion", motionText, " | ");
+        if (hadPriorMotion) appendMotionTyping(" | " + motionText);
+        else startMotionTyping(motionText, uiStore.typeWriterSpeed);
       }
       segments.push(...newSegs);
       appendTyping(typedText(newSegs));
@@ -602,12 +695,11 @@ watch([() => uiStore.showCharacterLine, () => gameStore.currentStatus], ([newLin
       rearmNextMerge(newLine);
     } else {
       // 全新台词：重置显示区 + 从 0 打字（台词与动作区并行逐字打字）
-      isShowingMotionText.value = false;
       segments = buildSegments(newLine);
       dialogueMerge.mergedLength = newLine.length;
       resetResponseDisplay();
       startTyping(typedText(), uiStore.typeWriterSpeed);
-      if (settingsStore.text.inlineMotionText && uiStore.showCharacterMotionText) {
+      if (uiStore.showCharacterMotionText) {
         startMotionTyping(uiStore.showCharacterMotionText, uiStore.typeWriterSpeed);
       }
       rearmNextMerge(newLine);
@@ -616,7 +708,6 @@ watch([() => uiStore.showCharacterLine, () => gameStore.currentStatus], ([newLin
     stopTyping();
     stopMotionTyping();
     dialogueMerge.mergedLength = 0;
-    isShowingMotionText.value = false;
     currentDisplayedText.value = "";
     segments = [];
   }
@@ -663,6 +754,33 @@ onUnmounted(() => {
   destroyScreenshot();
 });
 
+// 粘贴图片：读取剪贴板中的图片，复用截图链路（预览、压缩与视觉路由和截图一致）。
+// 已有截图时直接覆盖，与"重新截取"行为对齐。
+function onPasteImage(event: ClipboardEvent) {
+  const items = event.clipboardData?.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (!item.type.startsWith("image/")) continue;
+    const file = item.getAsFile();
+    if (!file) continue;
+    event.preventDefault();
+    pasteLoading.value = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      // 后端与预览均按裸 base64 处理，去掉 data URL 前缀
+      const dataUrl = String(reader.result ?? "");
+      screenshotBase64.value = dataUrl.slice(dataUrl.indexOf(",") + 1);
+      hasScreenshot.value = true;
+      // 至少展示 400ms，避免读取太快进度条一闪而过
+      setTimeout(() => (pasteLoading.value = false), 400);
+    };
+    reader.onerror = () => (pasteLoading.value = false);
+    reader.readAsDataURL(file);
+    return;
+  }
+}
+
 function sendOrContinue() {
   if (gameStore.currentStatus === "input") {
     send();
@@ -671,18 +789,11 @@ function sendOrContinue() {
   }
 }
 
-// 推进状态机 —— 与桌宠 DialogueBox 共用；主界面多一层两段式动作文本
+// 推进状态机 —— 与桌宠 DialogueBox 共用；主界面额外持有动作文本
 const { continueDialog } = useDialogAdvance({
   isTyping,
   finishTyping,
-  motion: {
-    isShowingMotionText,
-    showMotionLine: (motionText) => {
-      resetResponseDisplay();
-      segments = [{ kind: "motion", text: motionText }];
-      startTyping(motionText, uiStore.typeWriterSpeed);
-    },
-  },
+  inlineMotion: true,
   onProceed: ({ isPlayerTrigger }) => {
     if (isPlayerTrigger) emit("player-continued");
     emit("dialog-proceed");
@@ -693,9 +804,6 @@ function removeDialog(_e: Event) {
   hide();
 }
 
-// ── 对话框外观（响应 settings store） ──
-// Dialog appearance logic extracted to composable: useDialogAppearance
-
 defineExpose({
   continueDialog,
   isTyping,
@@ -703,8 +811,21 @@ defineExpose({
 </script>
 
 <style scoped>
-/* AI 回复显示区：标准/内联模式共用。颜色由两个子容器决定
-     （台词区白、动作区灰），这里的灰色仅作 fallback */
+/* 粘贴图片读取进度条：不定长亮段往复滑动 */
+.paste-progress-bar {
+  animation: paste-progress-slide 1.1s ease-in-out infinite;
+}
+@keyframes paste-progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* AI 回复显示区。颜色由两个子容器决定（台词区白、动作区灰），
+     这里的灰色仅作 fallback */
 .response-display {
   color: #9ca3af;
 }
@@ -873,9 +994,13 @@ defineExpose({
 
 <style>
 /* 底部 Home 指示器安全区：对话框本体铺到屏幕底（其半透明底盖住背景条带），
-     仅内容底部让出 env() 高度，输入框不被 Home 指示器遮挡（桌面/Android 桌面 env=0） */
+     仅内容底部让出 env() 高度，输入框不被 Home 指示器遮挡（桌面/Android 桌面 env=0）。
+     外观（渐变底色 / 圆角 / 文字色）固定于此，投屏窗口另有 !important 覆盖。 */
 .game-dialog {
   padding-bottom: calc(15px + var(--safe-area-inset-bottom, 0px));
+  color: #ffffff;
+  border-radius: 16px;
+  background: linear-gradient(to top, rgba(0, 14, 39, 0.7), rgba(0, 14, 39, 0.6));
 }
 /* 逐字符淡入+上浮动画的 @keyframes 已移入 src/assets/styles/dialogue-text.css（全局引入） */
 </style>

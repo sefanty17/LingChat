@@ -33,6 +33,8 @@ export interface BackgroundImageInfo {
   title: string;
   url: string;
   time: string;
+  /** 所属子分类（子文件夹名；根目录为“根目录”） */
+  category?: string;
   /** 来源："game" 或提供该背景图的插件 id。 */
   source?: string;
   plugin_id?: string | null;
@@ -71,12 +73,16 @@ export interface SaveInfo {
   create_date: string;
   last_message?: string;
   screenshot?: string;
+  /** 本存档绑定的身份名字（老存档 / 身份卡已删除时为 undefined） */
+  identity_name?: string | null;
 }
 
 export interface MusicTrack {
   name: string;
   url: string;
   time: string;
+  /** 所属子分类（子文件夹名；根目录为“根目录”） */
+  category?: string;
   /** 来源："game" 或提供该音乐的插件 id。 */
   source?: string;
   plugin_id?: string | null;

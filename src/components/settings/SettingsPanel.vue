@@ -1,6 +1,10 @@
 <template>
   <div class="blur-overlay" v-if="shouldShowOverlay" :style="{ opacity: overlayOpacity }"></div>
-  <div class="settings-panel flex h-full flex-col" v-show="uiStore.showSettings">
+  <div
+    class="settings-panel flex h-full flex-col"
+    :class="{ 'slide-in-right': slideFromRight && !panelLeaving, 'is-leaving': panelLeaving }"
+    v-show="panelVisible"
+  >
     <div class="w-full shrink-0">
       <SettingsNav ref="settingsNavRef" @remove-more-menu-from-a="onAddFromA" />
     </div>
@@ -13,7 +17,7 @@
     >
       <Transition :name="transitionName">
         <!-- KeepAlive 缓存设置子页面实例：切换时只激活/停用，不销毁重建，保留状态 -->
-        <KeepAlive>
+        <KeepAlive v-if="contentReady">
           <component
             :is="currentTabComponent"
             :key="uiStore.currentSettingsTab"
@@ -28,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch, type Component } from "vue";
 import { useUIStore } from "../../stores/modules/ui/ui";
 import {
   SettingsAchievement,
@@ -45,6 +49,16 @@ import {
 } from "./pages";
 import SettingsNav from "./SettingsNav.vue";
 
+// 从主菜单打开时让面板从右侧滑入（转盘式）。做在面板本体上而不是外层包一层：
+// 本组件根节点是 fragment 且两个根都是 position fixed，外层带 transform 会成为
+// fixed 的包含块，令 blur-overlay 的 backdrop-filter 失去采样背景并压低层级
+const props = defineProps<{ slideFromRight?: boolean }>();
+/** slideFromRight 场景下退场动画播完后通知父级，父级据此才真正卸载本组件 */
+const emit = defineEmits<{ (e: "closed"): void }>();
+
+/** 退场动画时长，须与下方 settings-panel-slide-out 的时长一致 */
+const LEAVE_MS = 420;
+
 const uiStore = useUIStore();
 
 // 获取 A 组件和 B 组件的 Ref 实例
@@ -55,21 +69,70 @@ const settingsAdvanceRef = ref<InstanceType<typeof SettingsAdvance> | null>(null
 const shouldShowOverlay = ref(false);
 const overlayOpacity = ref(0);
 
+// 面板是否可见：关闭时先让退场动画播完再隐藏，否则面板会瞬间消失
+const panelVisible = ref(uiStore.showSettings);
+const panelLeaving = ref(false);
+let leaveTimer: number | null = null;
+
+// 内容页跨两帧渲染：先让面板外壳和导航完成一次布局，再挂内容。
+// 只隔一帧不够：同一帧内排队的多次 DOM 变更会被浏览器合并到帧末统一布局
+const contentReady = ref(false);
+let contentFrame: number | null = null;
+
+onMounted(() => {
+  contentFrame = requestAnimationFrame(() => {
+    contentFrame = requestAnimationFrame(() => {
+      contentFrame = null;
+      contentReady.value = true;
+    });
+  });
+});
+
+function cancelLeave() {
+  if (leaveTimer !== null) {
+    clearTimeout(leaveTimer);
+    leaveTimer = null;
+  }
+  panelLeaving.value = false;
+}
+
+function startLeave() {
+  cancelLeave();
+  panelLeaving.value = true;
+  leaveTimer = window.setTimeout(() => {
+    leaveTimer = null;
+    panelLeaving.value = false;
+    panelVisible.value = false;
+    emit("closed");
+  }, LEAVE_MS);
+}
+
+onUnmounted(() => {
+  cancelLeave();
+  if (contentFrame !== null) cancelAnimationFrame(contentFrame);
+});
+
 watch(
   () => uiStore.showSettings,
   (newVal) => {
     if (newVal) {
       // 显示时：立即显示元素，然后延迟改变透明度
+      cancelLeave();
+      panelVisible.value = true;
       shouldShowOverlay.value = true;
       setTimeout(() => {
         overlayOpacity.value = 1;
       }, 10); // 使用很小的延迟确保浏览器有机会渲染
     } else {
-      // 隐藏时：先改变透明度，然后延迟隐藏元素
+      // 隐藏时：先改变透明度，淡出播完再卸载元素。
+      // 时长须与 .blur-overlay 的 transition 一致，早了会在淡出中途被硬切
       overlayOpacity.value = 0;
       setTimeout(() => {
         shouldShowOverlay.value = false;
-      }, 100); // 匹配你的动画持续时间
+      }, 300);
+      // 主菜单场景反向滑出，播完再隐藏并通知父级卸载；其余场景维持瞬时隐藏
+      if (props.slideFromRight) startLeave();
+      else panelVisible.value = false;
     }
   },
   { immediate: true },
@@ -207,8 +270,8 @@ defineExpose({
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 999;
   transition: opacity 0.3s ease;
   opacity: 0;
@@ -223,6 +286,36 @@ defineExpose({
   z-index: 1000;
   background: transparent;
   color: var(--text-primary, #fff);
+}
+
+/* 主菜单打开设置时面板整体从右侧滑入，与设置内 tab 切换同一套动画参数。
+   用 animation 而不是 transition：transition 需要起始状态先被绘制一帧，
+   靠定时器翻转 class 存在竞态；keyframes 在首次渲染即生效，播完自动回默认位置 */
+.settings-panel.slide-in-right {
+  animation: settings-panel-slide-in 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes settings-panel-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* 关闭时反向滑出。播完由脚本隐藏面板并回调父级卸载，时长见 LEAVE_MS */
+.settings-panel.is-leaving {
+  animation: settings-panel-slide-out 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes settings-panel-slide-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .slide-left-enter-active,

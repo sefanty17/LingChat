@@ -47,6 +47,7 @@
           @new-chapter="openModal('chapter')"
           @new-character="openModal('character')"
           @import-character="openModal('importChar')"
+          @edit-character="openCharacterEditor"
         />
       </Transition>
     </div>
@@ -55,7 +56,7 @@
     <PreviewStage :from-chapter="previewFrom" />
 
     <!-- ============ 弹窗 ============ -->
-    <EditorModals v-model:modal="modal" />
+    <EditorModals v-model:modal="modal" :editing-character="editingCharacter" />
 
     <!-- ============ 快捷键表 ============ -->
     <ShortcutHelpPanel :visible="shortcutHelp" @close="shortcutHelp = false" />
@@ -69,6 +70,7 @@ import type { Component } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { MenuPage } from "@/components/ui";
 import { useScriptEditorStore } from "@/stores/modules/script-editor";
+import type { ScriptCharacter } from "@/api/services/script-editor";
 import EditorHeader from "@/components/script-editor/panels/EditorHeader.vue";
 import ScriptListPanel from "@/components/script-editor/panels/ScriptListPanel.vue";
 import FlowTab from "@/components/script-editor/tabs/FlowTab.vue";
@@ -104,8 +106,15 @@ const bgImageSrc = computed(() =>
 
 // ---- 弹窗 ----
 const modal = ref<"script" | "chapter" | "character" | "importChar" | null>(null);
+/** 正在编辑的角色（null = 新建）。角色行点进来就是编辑，别让人删了重建。 */
+const editingCharacter = ref<ScriptCharacter | null>(null);
 const openModal = (which: "script" | "chapter" | "character" | "importChar") => {
+  editingCharacter.value = null;
   modal.value = which;
+};
+const openCharacterEditor = (c: ScriptCharacter) => {
+  editingCharacter.value = c;
+  modal.value = "character";
 };
 
 // ---- Tab 切换（复用设置面板的推入推出过渡） ----
@@ -182,20 +191,6 @@ watch(
     transitionName.value = forward ? "slide-left" : "slide-right";
   },
 );
-
-const shouldAnimate = computed(() => {
-  // 当显示 ScriptListPanel 时禁用动画
-  console.log(
-    "store的detail是",
-    store.detail,
-    "是否为空",
-    store.detail === undefined || store.detail === null,
-  );
-  if (store.tab === "flow" && store.detail) {
-    return false;
-  }
-  return true;
-});
 
 // ---- 快捷键表 ----
 const shortcutHelp = ref(false);

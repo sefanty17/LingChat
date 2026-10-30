@@ -8,7 +8,7 @@
 
 ```text
 ① 实现 Tool trait（定义 + 执行）      → 新文件，如 tools/my_tool.rs
-② 在 built_in_registry 里注册          → tools/mod.rs 一行
+② 在 built_in_registry 里注册          → tools/builtin/mod.rs 一行
 ③ 给角色/场景配置权限                  → 编辑 tool_permissions.toml（或用权限 API）
 ```
 
@@ -16,7 +16,7 @@
 
 ## 2. 第一步：实现 `Tool` trait
 
-把 `src-tauri/src/ai_service/tools/clock.rs` 当模板（它就是内置示例工具 `get_current_time`）：
+把 `crates/ling-chat-main/src/ai_service/tools/builtin/clock.rs` 当模板（它就是内置示例工具 `get_current_time`）：
 
 ```rust
 use async_trait::async_trait;
@@ -46,6 +46,10 @@ impl Tool for MyTool {
                 "additionalProperties": false        // 拒绝多余参数
             }),
         )
+        .with_rag_examples([
+            "帮我查一下某个关键词",
+            "我想找跟这个有关的东西",
+        ])
     }
 
     /// 执行：入参是解析好的 JSON object，返回 JSON 结果
@@ -76,6 +80,8 @@ impl Tool for MyTool {
 #[async_trait]
 pub trait Tool: Send + Sync {
     fn definition(&self) -> ToolDefinition;
+    fn timeout_hint(&self) -> Option<Duration> { None }
+    fn lenient_arguments(&self) -> bool { false }
     async fn execute(&self, context: &ToolContext, arguments: Value)
         -> Result<ToolResult, ToolError>;
 }
@@ -83,11 +89,13 @@ pub trait Tool: Send + Sync {
 
 - 必须 `Send + Sync`：注册后放进 `Arc<dyn Tool>`，被多个并发生成任务共享；
 - `definition()` 同步返回，每次下发前都会被调用（所以描述要稳定，不要依赖可变状态）；
-- `execute()` 是异步的，可以自由 `await` 任何东西（HTTP、DB、文件），但**有 2 秒超时** —— 慢操作要么自己分页/截断，要么返回「需要继续」之类让调用方知晓。
+- `with_rag_examples([...])` 给 Tool RAG 挂「可能的提问方式」：每句单独算向量，检索取最高分。建议 3~5 条玩家口吻的中文短句；不配则回退到描述。示例只在本机做索引，不会下发给模型；
+- `execute()` 是异步的，可以自由 `await` 任何东西（HTTP、DB、文件），但**有 2 秒超时** —— 慢操作要么自己分页/截断，要么用 `timeout_hint()` 放宽（God Agent 的 `update_affection` 因为要写库而放宽到 30 秒）；
+- `lenient_arguments()` 默认 `false`（严格：参数必须是合法 JSON object 且通过 schema 校验）。**除非你的工具需要容忍模型把整数写成 `"6"` 这类畸形输出，否则不要覆写**——放宽后 schema 不再兜住类型错误，得自己在 `execute()` 里容错。
 
 ## 3. 第二步：注册
 
-在 `tools/mod.rs::built_in_registry` 里加一行：
+在 `tools/builtin/mod.rs::built_in_registry` 里加一行：
 
 ```rust
 pub fn built_in_registry(role_names: ...) -> Result<ToolRegistry> {

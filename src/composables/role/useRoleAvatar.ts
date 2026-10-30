@@ -15,6 +15,7 @@
  */
 import { ref, watch, nextTick, onUnmounted, type Ref } from "vue";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useGameStore } from "@/stores/modules/game";
 import { useUIStore } from "@/stores/modules/ui/ui";
 import { EMOTION_CONFIG, EMOTION_CONFIG_EMO } from "@/controllers/emotion/config";
@@ -65,6 +66,34 @@ export function avatarFolderParams(role: GameRole): {
   };
 }
 
+/**
+ * 立绘的取景方式（纯函数）。
+ *
+ * 宽屏按 contain 完整显示；窄屏把高度锁死到 80%~100%，宽度按比例溢出后被容器裁掉，
+ * 这样人物在竖屏下不会缩成一条。触摸区域叠层要靠它还原立绘的实际落位，
+ * 所以编辑器与游戏必须取同一个值，不要各写一份。
+ */
+/**
+ * 立绘的宽高比，取不到返回 null。
+ *
+ * 触摸区域要按立绘的实际落位摆放，而落位由图片宽高比决定；立绘本身是画在
+ * background-image 上的，读不到自然尺寸，只能自己加载一次（URL 已在缓存里）。
+ * 用 onload/onerror 而不是 decode()：decode() 在部分情况下会为一个已经加载成功的
+ * 图片抛错，那样宽高比就永远拿不到，整块区域功能会静默失效。
+ */
+export function loadImageAspect(url: string): Promise<number | null> {
+  if (!url) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () =>
+      resolve(image.naturalHeight ? image.naturalWidth / image.naturalHeight : null);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
+export { avatarObjectFit } from "@/utils/avatar-layout";
+
 export function useRoleAvatar(options: UseRoleAvatarOptions): UseRoleAvatarApi {
   const { role, audioRef } = options;
   const bubbleDurationMs = options.bubbleDurationMs ?? DEFAULT_BUBBLE_MS;
@@ -82,13 +111,50 @@ export function useRoleAvatar(options: UseRoleAvatarOptions): UseRoleAvatarApi {
   // 两个代次号各管一条异步链：头像解析、情绪演出
   let resolveAvatarId = 0;
   let latestEmotionId = 0;
+  let avatarRevision = 0;
+  let disposed = false;
+  let stopAvatarUpdates: (() => void) | undefined;
+  let stopCostumeUpdates: (() => void) | undefined;
+  void listen<{ role_id: number; old_name: string; new_name: string }>(
+    "character:costume-renamed",
+    (event) => {
+      if (event.payload.role_id !== role.value.roleId) return;
+      if (role.value.clothesName === event.payload.old_name)
+        role.value.clothesName = event.payload.new_name;
+      avatarRevision = Date.now();
+      void resolveAvatar();
+    },
+  )
+    .then((stop) => {
+      if (disposed) stop();
+      else stopCostumeUpdates = stop;
+    })
+    .catch((error) => console.error("监听角色服装更新失败", error));
+  void listen<number>("character:avatars-updated", (event) => {
+    if (event.payload !== role.value.roleId) return;
+    avatarRevision = Date.now();
+    void resolveAvatar();
+  })
+    .then((stop) => {
+      if (disposed) stop();
+      else stopAvatarUpdates = stop;
+    })
+    .catch((error) => console.error("监听角色立绘更新失败", error));
+  onUnmounted(() => {
+    disposed = true;
+    stopAvatarUpdates?.();
+    stopCostumeUpdates?.();
+    resolveAvatarId++;
+    latestEmotionId++;
+  });
 
   async function resolveAvatar() {
     const currentId = ++resolveAvatarId;
     try {
       const path = await invoke<string>("get_avatar_file", avatarFolderParams(role.value));
       if (currentId === resolveAvatarId) {
-        targetAvatarUrl.value = convertFileSrc(path);
+        targetAvatarUrl.value =
+          convertFileSrc(path) + (avatarRevision ? `?v=${avatarRevision}` : "");
       }
     } catch {
       if (currentId === resolveAvatarId) {
@@ -124,7 +190,7 @@ export function useRoleAvatar(options: UseRoleAvatarOptions): UseRoleAvatarApi {
 
   /**
    * 情绪气泡：先置 false → nextTick 置 true，重触发 CSS 过渡。
-   * 连续两次相同情绪时也要重播（两次的图片 URL 相同，光换样式不会重播）。
+   * 演出版号要求重播时，即使两次图片 URL 相同，也要重新触发过渡。
    */
   const showEmotionBubble = (image: string, className: string) => {
     currentBubbleImageUrl.value = image;
@@ -149,23 +215,35 @@ export function useRoleAvatar(options: UseRoleAvatarOptions): UseRoleAvatarApi {
     armBubbleHide();
   };
 
-  // 头像文件随角色、情绪、衣服任一变化重新解析
+  // 角色与衣服变化直接解析；情绪变化由下方演出流程统一解析。
   watch(
-    () => [
-      role.value.roleId,
-      role.value.emotion,
-      role.value.clothesName,
-      role.value.character_folder,
-    ],
+    () => [role.value.roleId, role.value.clothesName, role.value.character_folder],
     () => resolveAvatar(),
     { immediate: true },
   );
 
   // 监听表情，配合展示层的加载状态播放特效
   watch(
-    () => role.value.emotion,
-    async (newEmotion) => {
+    () => [role.value.emotion, role.value.emotionRevision] as const,
+    async ([newEmotion]) => {
       const currentId = ++latestEmotionId;
+      resolveAvatarId++;
+      const config = EMOTION_CONFIG[newEmotion];
+
+      if (
+        config?.animation &&
+        config.animation !== "none" &&
+        activeAnimationClass.value === config.animation
+      ) {
+        // 连续使用同一种 CSS 动作时，先保留旧立绘并完成动作重置，再解析下一姿势，
+        // 确保新立绘首次显示时已经带上本次动作。
+        activeAnimationClass.value = "normal";
+        await nextTick();
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        if (currentId !== latestEmotionId) return;
+      }
 
       // 依次等待：头像路径解析 → DOM 更新传给子组件 → 子组件图片加载完成
       await resolveAvatar();
@@ -175,7 +253,6 @@ export function useRoleAvatar(options: UseRoleAvatarOptions): UseRoleAvatarApi {
       // 陈旧性检查必须在注入的 await 之后：期间表情又变了就丢弃这次结果
       if (currentId !== latestEmotionId) return;
 
-      const config = EMOTION_CONFIG[newEmotion];
       if (!config) return;
 
       if (config.animation && config.animation !== "none") {

@@ -39,7 +39,7 @@ vkEnumeratePhysicalDevices 的索引 N  ⇔  Dawn adapter 索引 N  ⇔  WebGPU 
 
 ## 4. 实现
 
-### 4.1 依赖（`src-tauri/Cargo.toml`）
+### 4.1 依赖（`crates/ling-chat-main/Cargo.toml`）
 
 ```toml
 # Windows：DXGI 枚举（DirectML 设备）
@@ -57,7 +57,7 @@ ash = { version = "0.38", default-features = false, features = ["loaded"] }
 
 ### 4.2 Windows/DirectML 枚举（DXGI）
 
-Windows 端用 DXGI 枚举 DirectML 可用的 GPU，位于 `src-tauri/src/utils/device.rs` 的
+Windows 端用 DXGI 枚举 DirectML 可用的 GPU，位于 `crates/ling-chat-main/src/utils/device.rs` 的
 `#[cfg(target_os = "windows")]` 分支：
 
 ```rust
@@ -170,8 +170,29 @@ _ if s.starts_with("device:") => { /* → InferenceDevice::Specific(id) */ }
 
 ### 4.6 后端命令
 
-`tts_local_list_devices`（`src-tauri/src/ai_service/tts/local/mod.rs`）
+`tts_local_list_devices`（`crates/ling-chat-main/src/ai_service/tts/local/mod.rs`）
 委托 `crate::utils::device::list_devices()`，前端经 `TtsLocal.listDevices()` 调用。
+
+### 4.7 Linux 分发：Dawn 动态库
+
+WebGPU EP 依赖的 Dawn 无法静态链接，ort 把它作为 `libwebgpu_dawn.so` 单独提供。
+`ort` 的 `copy-dylibs` 只在构建产物目录放一个指向 `~/.cache/ort.pyke.io` 的软链接，
+安装包里一条路径都不成立，所以裸包启动会报
+`libwebgpu_dawn.so: cannot open shared object file`。
+
+分三段配合解决：
+
+| 环节       | 位置                                                       | 作用                                                                                             |
+| ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 可执行文件 | `src-tauri/build.rs`                                       | 给 bin 写 RPATH：`$ORIGIN`、`$ORIGIN/../lib`、`$ORIGIN/../lib/LingChat/lib`                      |
+| 打包       | `scripts/prepare-linux-libs.mjs` + `tauri.linux.conf.json` | 打包前把库解引用复制到 `src-tauri/linux-libs/`，映射进 deb / AppImage 的 `/usr/lib/LingChat/lib` |
+| CI         | `release.yml` 的 linux-amd64 步骤                          | 额外拷进构建机系统库目录，让 linuxdeploy 能解析该依赖                                            |
+
+RPATH 覆盖三种运行形态：开发态库在 exe 同目录、AppImage 里在 `usr/lib/LingChat/lib`、
+deb 安装后在 `/usr/bin/../lib/LingChat/lib`。目录不存在时动态加载器静默跳过。
+
+纯 CPU 的 Linux aarch64 不链接 Dawn，脚本找不到库会留空目录，不影响打包。
+新增第三方运行期库时改 `RUNTIME_LIBS` 数组即可。
 
 ## 5. 设备选择与热切换流程
 
@@ -227,13 +248,16 @@ WebGPU EP 的 `deviceId` 选项是否被 ORT 采纳需真机双显卡复核—�
    Linux（`cfg(target_os = "linux")`），macOS 保持空列表（通常单 GPU，无影响）。
 4. **运行时依赖 libvulkan**：加载失败时 `list_devices` 返回空列表并打 warn，
    不影响其他功能。
+5. **Dawn 动态库随包分发**：`libwebgpu_dawn.so` 无法静态链接，见 4.7。若发行包
+   启动即报 `cannot open shared object file`，优先检查该链路是否完整。
 
 ## 8. 相关代码位置
 
-| 内容        | 路径                                                                          |
-| ----------- | ----------------------------------------------------------------------------- |
-| 枚举 / 解析 | `src-tauri/src/utils/device.rs`                                               |
-| 后端命令    | `src-tauri/src/ai_service/tts/local/mod.rs`（`tts_local_list_devices` 等）    |
-| EP 组装     | `src-tauri/patches/sbv2_core/src/model.rs`（`webgpu` 分支，`with_device_id`） |
-| 前端选择器  | `src/components/settings/pages/SettingsTts.vue`                               |
-| 依赖        | `src-tauri/Cargo.toml`（Windows target `windows` DXGI / Linux target `ash`）  |
+| 内容        | 路径                                                                                           |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| 枚举 / 解析 | `crates/ling-chat-main/src/utils/device.rs`                                                    |
+| 后端命令    | `crates/ling-chat-main/src/ai_service/tts/local/mod.rs`（`tts_local_list_devices` 等）         |
+| EP 组装     | `sbv2_core`（git 依赖 shadow01a/sbv2-api）的 `src/model.rs`（`webgpu` 分支，`with_device_id`） |
+| 前端选择器  | `src/components/settings/pages/SettingsTts.vue`                                                |
+| 依赖        | `crates/ling-chat-main/Cargo.toml`（Windows target `windows` DXGI / Linux target `ash`）       |
+| Dawn 分发   | `src-tauri/build.rs`、`scripts/prepare-linux-libs.mjs`、`src-tauri/tauri.linux.conf.json`      |

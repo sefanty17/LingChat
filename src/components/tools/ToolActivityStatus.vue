@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { CheckCircle2, CircleAlert, LoaderCircle } from "lucide-vue-next";
+import { CheckCircle2, CircleAlert, LoaderCircle } from "@lucide/vue";
 import { useI18n } from "vue-i18n";
 import { currentToolActivity, toolCallPreparing } from "@/api/services/tool-settings";
 import { useUIStore } from "@/stores/modules/ui/ui";
@@ -62,6 +62,7 @@ const readTools = new Set([
   "memory_get_notes",
   "schedule_get_all",
   "character_list",
+  "character_get_clothes",
   "scene_list",
   "status_get_current",
   "status_get_scene",
@@ -74,6 +75,7 @@ const updateTools = new Set([
   "memory_add_note",
   "memory_update_note",
   "memory_delete_note",
+  "character_set_clothes",
 ]);
 const switchTools = new Set(["character_switch", "scene_switch"]);
 

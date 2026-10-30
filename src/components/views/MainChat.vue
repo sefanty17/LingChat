@@ -2,7 +2,12 @@
   <div class="main-box">
     <!-- 主界面始终渲染，加载动画期间在后台初始化 -->
     <FreeModeTools />
-    <FullAccessWarning />
+    <div class="main-status-panel">
+      <div class="main-status-row">
+        <StatusInfoBar />
+      </div>
+      <FullAccessWarning />
+    </div>
     <GameBackground></GameBackground>
     <!-- <GameAvatar ref="gameAvatarRef" @audio-ended="handleAudioFinished" />  -->
     <GameRolesStage
@@ -10,9 +15,21 @@
       @audio-ended="handleAudioFinished"
       @audio-started="handleAudioStarted"
     />
-    <GameDialog ref="gameDialogRef" @player-continued="manualTriggerContinue" />
+    <GameDialog
+      ref="gameDialogRef"
+      :relation-ready="relationReady"
+      @player-continued="manualTriggerContinue"
+    />
 
-    <!-- 原有的菜单按钮 -->
+    <RelationGuardModal
+      :visible="relationModalVisible"
+      :roles="blockedRoleList"
+      :me-name="meName"
+      @close="closeRelationModal"
+      @goto-edit="gotoRelationEdit"
+    />
+
+    <!-- 菜单按钮 -->
     <div id="menu-panel" ref="menuPanelRef">
       <ToolActivityStatus v-if="!(gameStore.runningScript && gameStore.runningScript.isRunning)" />
       <Button
@@ -24,7 +41,7 @@
       >
         <h3 class="hidden xl:block">{{ $t("views.mainChat.auto") }}</h3>
       </Button>
-      <!-- 桌宠模式依赖 Windows 透明置顶窗口与 hit-test（lib.rs 为 cfg(windows)），移动端不可用 -->
+      <!-- 桌宠模式依赖 Windows 透明置顶窗口，移动端不可用 -->
       <Button
         v-if="!isMobile()"
         type="nav"
@@ -40,10 +57,10 @@
     </div>
     <GameExtraUI />
 
-    <!-- Android 拍照 / 相册来源选择 sheet,见 useImageSourcePicker. 仅 chat 路由可见(PetMode 在手机上已停用) -->
+    <!-- Android 拍照 / 相册来源选择 sheet，仅 chat 路由可见 -->
     <ImageSourcePicker />
 
-    <!-- 首次加载过渡动画（覆盖在主界面上方，主界面在后台并行初始化） -->
+    <!-- 首次加载过渡动画 -->
     <LoadingTransition v-if="showLoading" @complete="onLoadingComplete" />
   </div>
 </template>
@@ -51,9 +68,10 @@
 <script setup lang="ts">
 import { getEnvConfigByKey } from "@/api/services/config";
 import FreeModeTools from "@/components/tools/FreeModeTools.vue";
+import StatusInfoBar from "@/components/tools/StatusInfoBar.vue";
 import ToolActivityStatus from "@/components/tools/ToolActivityStatus.vue";
 import { eventQueue } from "@/core/events/event-queue";
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useGameStore } from "../../stores/modules/game";
 import { useUIStore } from "../../stores/modules/ui/ui";
@@ -63,15 +81,14 @@ import LoadingTransition from "./LoadingTransition.vue";
 
 import FullAccessWarning from "@/components/tools/FullAccessWarning.vue";
 import ImageSourcePicker from "@/components/ui/ImageSourcePicker.vue";
+import RelationGuardModal from "@/components/ui/RelationGuardModal.vue";
 import { isMobile, isWindows } from "@/utils/platform";
 import { useAutoAdvance } from "@/composables/chat/useAutoAdvance";
+import { useRelationGuard } from "@/composables/chat/useRelationGuard";
 import GameExtraUI from "../game/standard/GameExtraUI.vue";
 
 const LOADING_STORAGE_KEY = "lingchat_loading_shown";
 
-// 会话级标记：同一页面 session 内只播放一次加载动画。
-// 仅靠 localStorage 会在路由卸载/重挂时回显（如桌宠切回聊天），
-// 用模块级变量兜底，确保一次启动只播放一次。
 let loadingShownThisSession = false;
 
 const router = useRouter();
@@ -87,12 +104,9 @@ function onLoadingComplete() {
   localStorage.setItem(LOADING_STORAGE_KEY, "1");
   // 加载动画结束，恢复事件队列消费
   eventQueue.resume();
-  // 通知 ASR：主界面加载完成，允许启动能量监测（§1.9）
   gameStore.setLoadingComplete(true);
 }
 
-// 高级设置可关闭首次开屏动画（display.disable_splash_animation）。
-// 关闭时直接进入完成态：跳过动画、恢复事件队列、放行 ASR。
 getEnvConfigByKey("display.disable_splash_animation")
   .then((setting) => {
     if (setting.value === "true" && showLoading.value) {
@@ -109,14 +123,10 @@ const goToPetMode = () => {
 
 const gameDialogRef = ref<InstanceType<typeof GameDialog> | null>(null);
 const menuPanelRef = ref<HTMLElement | null>(null);
-let settingsSnapshotSession: number | null = null;
 
 const openSettings = async () => {
-  // 存档截图（原逻辑，保留用于存档预览）
   gameStore.captureScreenshot();
-  // Windows 静态背景快照 — 非阻塞：hide → capture → 立即开设置 → await → finally restore
   if (isWindows()) {
-    const el = menuPanelRef.value;
     (async () => {
       try {
         uiStore.toggleSettings(true);
@@ -144,12 +154,54 @@ const runInitialization = async () => {
   }
 };
 
+// 关系就绪门：未就绪时禁用输入框、输入区上方提示条 + 引导模态
+const {
+  ready: relationReady,
+  missingSide: relationMissingSide,
+  blockedRoleId,
+  blockedRoles,
+  modalVisible: relationModalVisible,
+  refresh: refreshRelationReady,
+  closeModal: closeRelationModal,
+} = useRelationGuard();
+
+const blockedRoleList = computed(() =>
+  blockedRoles.value.map((item) => ({
+    name: gameStore.getGameRole(item.roleId)?.roleName || uiStore.showCharacterTitle,
+    missingSide: item.missingSide,
+  })),
+);
+
+const meName = computed(() => gameStore.userName || "我");
+
+watch(
+  [() => gameStore.mainRoleId, () => gameStore.playerIdentityId],
+  ([roleId]) => void refreshRelationReady(roleId),
+  { immediate: true },
+);
+
+// 关闭设置后重新判定：用户很可能刚去补关系
+watch(
+  () => uiStore.showSettings,
+  (open) => {
+    if (!open) void refreshRelationReady(gameStore.mainRoleId);
+  },
+);
+
+// 「去填写」：记录待处理意图（缺哪一侧），打开设置并定位到角色列表页
+const gotoRelationEdit = () => {
+  const roleId = blockedRoleId.value;
+  if (roleId && roleId > 0) {
+    const kind = relationMissingSide.value === "identity" ? "identity" : "role";
+    uiStore.setPendingRelationGuide({ kind, roleId });
+  }
+  closeRelationModal();
+  uiStore.toggleSettings(true);
+  uiStore.setSettingsTab("character");
+};
+
 // 初始化游戏信息
 onMounted(() => {
-  // 每次进入自由对话都恢复事件队列——编辑器试玩结束后 clear() 会把 paused 置 true，
-  // 而 resume 只在首次加载的 LoadingTransition 里被调用，返回时走不到那里。
-  // 但首次加载时不能在这里恢复：AI 开场白的打字机/音效必须等 LoadingTransition
-  // 动画结束（onLoadingComplete 里 resume），否则会在开场动画遮罩后面提前播。
   if (!showLoading.value) {
     eventQueue.resume();
   }
@@ -158,7 +210,6 @@ onMounted(() => {
   }
 });
 
-// 自动推进调度（AUTO + 台词合并共用一条管道）—— 与桌宠 PetMode 共用同一实现
 const {
   onAudioStarted: handleAudioStarted,
   onAudioFinished: handleAudioFinished,
@@ -182,30 +233,33 @@ const {
   overflow: hidden;
 }
 
+.main-status-panel {
+  position: fixed;
+  top: calc(15px + var(--safe-area-inset-top));
+  left: 50%;
+  z-index: 1001;
+  display: flex;
+  width: min(44rem, calc(100vw - 2rem));
+  transform: translateX(-50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.main-status-row {
+  display: flex;
+  /* 窄屏隐藏时间、天气时，仍为两侧导航按钮保留第一行。 */
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+}
+
 #menu-panel {
   display: flex;
   position: fixed;
   top: calc(15px + var(--safe-area-inset-top));
   right: 20px;
   z-index: 1000;
-}
-.scene-controls {
-  position: fixed;
-  bottom: 80px; /* 根据聊天输入框高度调整 */
-  left: 20px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 8px 12px;
-  border-radius: 20px;
-  backdrop-filter: blur(5px);
-  z-index: 100;
-}
-
-.scene-indicator {
-  color: #fff;
-  font-size: 14px;
-  margin-left: 8px;
 }
 </style>

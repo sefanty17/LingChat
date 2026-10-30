@@ -10,16 +10,13 @@
             v-model="fontFamily"
             class="max-w-48 min-w-32 flex-none cursor-pointer appearance-none rounded-lg border border-white/20 bg-white/10 py-2 pr-8 pl-3 text-sm text-white transition-colors outline-none focus:border-(--accent-color)"
             @change="onFontChange"
+            @focus="ensureSystemFonts"
+            @pointerdown="ensureSystemFonts"
             :title="$t('settings.text.font.selectHint')"
           >
             <option value="">{{ $t("settings.text.font.default") }}</option>
             <optgroup v-if="importedFonts.length > 0" :label="$t('settings.text.font.imported')">
-              <option
-                v-for="f in importedFonts"
-                :key="f.name"
-                :value="f.name"
-                :style="{ fontFamily: `'${f.name}'` }"
-              >
+              <option v-for="f in importedFonts" :key="f.name" :value="f.name">
                 {{ f.name }}
               </option>
             </optgroup>
@@ -27,9 +24,7 @@
             <option v-if="fontsLoading" value="" disabled>
               {{ $t("settings.text.font.loading") }}
             </option>
-            <option v-for="f in systemFonts" :key="f" :value="f" :style="{ fontFamily: `'${f}'` }">
-              {{ f }}
-            </option>
+            <option v-for="f in systemFonts" :key="f" :value="f">{{ f }}</option>
           </select>
           <button
             class="flex flex-none cursor-pointer items-center justify-center rounded-lg border border-white/20 bg-white/10 px-[0.6rem] py-[0.35rem] text-white transition-colors hover:border-(--accent-color) hover:bg-white/20 active:bg-white/30"
@@ -70,16 +65,7 @@
         <Text :speed="textSpeedSample">{{ $t("settings.text.sample.demo") }}</Text>
       </MenuItem>
 
-      <MenuItem :title="$t('settings.text.inlineMotion.title')" size="small">
-        <template #header>
-          <AlignJustify :size="20" />
-        </template>
-        <Toggle :checked="settingsStore.text.inlineMotionText" @change="toggleInlineMotionText">
-          {{ $t("settings.text.inlineMotion.desc") }}
-        </Toggle>
-      </MenuItem>
-
-      <!-- 台词合并阈值：同角色连续短句自动合并续打（仅内联动作文本模式生效）；0=关闭 -->
+      <!-- 台词合并阈值：同角色连续短句自动合并续打；0=关闭 -->
       <MenuItem :title="$t('settings.text.mergeLine.title')" size="small">
         <template #header>
           <AlignJustify :size="20" />
@@ -124,6 +110,73 @@
         </div>
       </MenuItem>
 
+      <!-- 回复台词数量档位：运行时状态（随存档保存），需要进入对话后才能调整 -->
+      <MenuItem :title="$t('settings.text.replyLength.title')" size="small">
+        <template #header>
+          <MessageSquareText :size="20" />
+        </template>
+        <div class="flex items-center gap-2">
+          <Button
+            v-for="opt in REPLY_LENGTH_OPTIONS"
+            :key="opt.value"
+            type="big"
+            :active="replyLengthMode === opt.value"
+            :disabled="replyLengthMode === null || replyLengthSaving"
+            @click="setReplyLengthMode(opt.value)"
+          >
+            {{ $t(opt.labelKey) }}
+          </Button>
+        </div>
+        <p class="mt-3 text-sm leading-relaxed text-white/50">
+          {{
+            replyLengthMode === null
+              ? $t("settings.text.replyLength.unavailable")
+              : $t("settings.text.replyLength.desc")
+          }}
+        </p>
+      </MenuItem>
+
+      <MenuItem :title="$t('settings.text.engineDownload.title')" size="small">
+        <template #header>
+          <Download :size="20" />
+        </template>
+        <div class="flex gap-3">
+          <Button
+            type="big"
+            :title="$t('settings.text.engineDownload.cpuHint')"
+            @click="
+              openWebsite(
+                'https://www.modelscope.cn/models/lingchat-research-studio/SBV2-API/files',
+              )
+            "
+            >{{ $t("settings.text.engineDownload.cpu") }}</Button
+          >
+          <Button
+            type="big"
+            @click="
+              openWebsite(
+                'https://www.modelscope.cn/models/lingchat-research-studio/Style-Bert-VITS2-CUDA/files',
+              )
+            "
+            >{{ $t("settings.text.engineDownload.nvidia") }}</Button
+          >
+          <Button
+            type="big"
+            :title="$t('settings.text.engineDownload.amdHint')"
+            @click="
+              openWebsite(
+                'https://www.modelscope.cn/models/lingchat-research-studio/SBV2-API/files',
+              )
+            "
+            >{{ $t("settings.text.engineDownload.amd") }}</Button
+          >
+        </div>
+        <p class="mt-3 text-sm leading-relaxed text-white/50">
+          现在更推荐使用本软件自带的内置 TTS 模型，本处提供的 TTS
+          引擎需要自行下载，可以参考文档了解详细信息。
+        </p>
+      </MenuItem>
+
       <MenuItem :title="$t('settings.text.sedentary.title')" size="small">
         <template #header>
           <GlassWater :size="20" />
@@ -164,43 +217,6 @@
           <Earth :size="20" />
         </template>
         <Toggle @change="voiceSound">{{ $t("settings.text.voiceSound.desc") }}</Toggle>
-      </MenuItem>
-
-      <MenuItem :title="$t('settings.text.engineDownload.title')" size="small">
-        <template #header>
-          <Download :size="20" />
-        </template>
-        <div class="flex gap-3">
-          <Button
-            type="big"
-            :title="$t('settings.text.engineDownload.cpuHint')"
-            @click="
-              openWebsite(
-                'https://www.modelscope.cn/models/lingchat-research-studio/SBV2-API/files',
-              )
-            "
-            >{{ $t("settings.text.engineDownload.cpu") }}</Button
-          >
-          <Button
-            type="big"
-            @click="
-              openWebsite(
-                'https://www.modelscope.cn/models/lingchat-research-studio/Style-Bert-VITS2-CUDA/files',
-              )
-            "
-            >{{ $t("settings.text.engineDownload.nvidia") }}</Button
-          >
-          <Button
-            type="big"
-            :title="$t('settings.text.engineDownload.amdHint')"
-            @click="
-              openWebsite(
-                'https://www.modelscope.cn/models/lingchat-research-studio/SBV2-API/files',
-              )
-            "
-            >{{ $t("settings.text.engineDownload.amd") }}</Button
-          >
-        </div>
       </MenuItem>
 
       <MenuItem :title="$t('settings.text.back.title')" size="small">
@@ -475,6 +491,7 @@ import LanSyncDialog from "@/components/LanSyncDialog.vue";
 import ResourceSyncDialog from "@/components/ResourceSyncDialog.vue";
 import { useLanSync } from "@/composables/useLanSync";
 import { useUpdater } from "@/composables/useUpdater";
+import { eventQueue } from "@/core/events/event-queue";
 import { applyWebInitData } from "@/stores/modules/game/actions";
 import { useLlmProvidersStore } from "@/stores/modules/llm-providers";
 import type { DialogView } from "@/types/lanSync";
@@ -495,6 +512,7 @@ import {
   GlassWater,
   HardDrive,
   Import,
+  MessageSquareText,
   RefreshCw,
   Star,
   Timer,
@@ -502,7 +520,8 @@ import {
   Type,
   Wifi,
   Zap,
-} from "lucide-vue-next";
+} from "@lucide/vue";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
@@ -530,6 +549,10 @@ const ttsOrphanFiles = ref(0);
 const ttsOrphanSize = ref("0 B");
 const lastCleanupInfo = ref<{ deleted: number; timestamp: number } | null>(null);
 let ttsCacheRefreshTimer: ReturnType<typeof setInterval> | null = null;
+/** 「对话长度」档位变化事件监听句柄，卸载时解绑 */
+let unlistenReplyLength: UnlistenFn | null = null;
+/** 读取档位期间若收到变化事件，旧响应不能把新档位盖回去 */
+let replyLengthSeq = 0;
 
 // ─── Codex 额度 ────────────────────────────────────────────────
 // 只有「对话模型」选择了 Codex 提供商时才显示额度卡片并轮询；
@@ -784,10 +807,15 @@ const handleClearHistory = async () => {
   const confirmed = await dialogStore.confirm(t("settings.text.clearHistory.confirm"));
   if (!confirmed) return;
 
+  // 清空对话会连带停掉正在跑的剧本，它没播完的事件就成了旧会话残留：
+  // 先清空队列（会暂停），待状态落地后再 resume，避免它们播进清空后的对话
+  eventQueue.clear();
+
   try {
     // 调用后端重置对话（复用 init_game_status 逻辑）
     const data = await invoke<WebInitData>("clear_conversation");
     applyWebInitData(gameStore.$state, data);
+    eventQueue.resume();
 
     // 重置前端输入状态
     gameStore.currentStatus = "input";
@@ -810,6 +838,7 @@ const handleClearHistory = async () => {
       skipTipsCheck: true,
     });
   } catch (error: any) {
+    eventQueue.resume();
     uiStore.showNotification({
       type: "error",
       title: t("settings.text.clearHistory.errorTitle"),
@@ -821,11 +850,19 @@ const handleClearHistory = async () => {
 };
 
 onMounted(async () => {
+  // 先挂档位事件：本页被 KeepAlive 缓存，插件连上 MC 改档位时 onMounted 不会再跑，
+  // 只能靠后端广播把显示同步过来。
+  unlistenReplyLength = await listen<{ mode: ReplyLengthMode }>("reply-length:changed", (event) => {
+    const mode = event.payload?.mode;
+    if (mode === "short" || mode === "normal" || mode === "free") {
+      replyLengthSeq += 1;
+      replyLengthMode.value = mode;
+    }
+  });
   loadConfig();
   checkTtsCache();
   loadLastTtsCleanup();
-  // 加载本机已装字体族列表（Rust 侧枚举，单次缓存）
-  void loadSystemFonts();
+  // 系统字体列表改为展开下拉时再加载：几百个 option 在页面首次布局时会明显拖慢
   // 加载已导入字体列表
   void loadImportedFonts();
   // 每 30 秒自动刷新一次 TTS 缓存信息，频率适中不浪费资源
@@ -873,6 +910,8 @@ onUnmounted(() => {
     ttsCacheRefreshTimer = null;
   }
   stopCodexQuotaPolling();
+  unlistenReplyLength?.();
+  unlistenReplyLength = null;
 });
 
 function loadLastTtsCleanup() {
@@ -897,6 +936,8 @@ const loadConfig = async () => {
   for (const key of configKeys) {
     envSettings.value[key] = await getEnvConfigByKey(key);
   }
+  // 回复台词数量档位是运行时状态，单独走命令读取
+  void loadReplyLengthMode();
 };
 
 // 使用 settings store 的文字速度
@@ -932,6 +973,47 @@ const setMergeMotionMode = (val: "append" | "replace") => {
   settingsStore.update("text.mergeMotionMode", val);
 };
 
+// ─── 回复台词数量档位 ────────────────────────────────────────
+// 这是随存档保存的运行时状态（存在存档全局变量里），不是应用配置，
+// 因此走专用命令读写；不要改用 getEnvConfigByKey —— 配置树里没有这个键。
+const REPLY_LENGTH_OPTIONS = [
+  { value: "short", labelKey: "settings.text.replyLength.short" },
+  { value: "normal", labelKey: "settings.text.replyLength.normal" },
+  { value: "free", labelKey: "settings.text.replyLength.free" },
+] as const;
+type ReplyLengthMode = (typeof REPLY_LENGTH_OPTIONS)[number]["value"];
+// null = 当前不可调整（尚未进入对话 / 剧本模式 / 剧本编辑器试玩中）
+const replyLengthMode = ref<ReplyLengthMode | null>(null);
+const replyLengthSaving = ref(false);
+
+async function loadReplyLengthMode() {
+  const seq = replyLengthSeq;
+  try {
+    const mode = await invoke<ReplyLengthMode | null>("get_reply_length_mode");
+    // 读取期间若收到过档位变化事件，以事件为准，别让旧快照盖回去
+    if (seq === replyLengthSeq) replyLengthMode.value = mode;
+  } catch (e) {
+    console.warn("读取回复台词数量档位失败:", e);
+    if (seq === replyLengthSeq) replyLengthMode.value = null;
+  }
+}
+
+async function setReplyLengthMode(mode: ReplyLengthMode) {
+  if (replyLengthSaving.value || replyLengthMode.value === mode) return;
+  const previous = replyLengthMode.value;
+  replyLengthSaving.value = true;
+  try {
+    replyLengthMode.value = await invoke<ReplyLengthMode>("set_reply_length_mode", { mode });
+  } catch (e) {
+    // 后端拒绝（剧本模式 / 未进入对话等）时回滚显示，避免出现「看起来切了其实没生效」
+    replyLengthMode.value = previous;
+    console.error("切换回复台词数量失败:", e);
+    dialogStore.alert(t("settings.text.replyLength.failed"));
+  } finally {
+    replyLengthSaving.value = false;
+  }
+}
+
 // ─── 界面字体选择 ───────────────────────────────────────────
 const systemFonts = ref<string[]>([]);
 const importedFonts = ref<ImportedFontInfo[]>([]);
@@ -958,6 +1040,14 @@ async function loadSystemFonts() {
   } finally {
     fontsLoading.value = false;
   }
+}
+
+// 系统字体列表只在用户要展开下拉时才枚举，避免设置页首屏渲染几百个 option
+let systemFontsRequested = false;
+function ensureSystemFonts() {
+  if (systemFontsRequested) return;
+  systemFontsRequested = true;
+  void loadSystemFonts();
 }
 
 // ─── 导入字体 ───────────────────────────────────────────────
@@ -1030,10 +1120,6 @@ const textSpeedChange = (data: number) => {
 
 const voiceSound = (data: boolean) => {
   settingsStore.update("audio.chatEffectSound", data);
-};
-
-const toggleInlineMotionText = (data: boolean) => {
-  settingsStore.update("text.inlineMotionText", data);
 };
 
 const toggleSedentaryReminder = (data: boolean) => {

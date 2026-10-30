@@ -84,7 +84,7 @@
     <!-- Log area -->
     <div
       ref="logContainer"
-      class="min-h-0 flex-1 scrollbar-thin overflow-x-hidden overflow-y-auto rounded-xl border border-white/10 bg-black/65 px-3 py-3 font-['Cascadia_Code','Fira_Code','JetBrains_Mono','Consolas',monospace] text-[13px] leading-[1.7] backdrop-blur-md"
+      class="min-h-0 flex-1 scrollbar-thin overflow-x-hidden overflow-y-auto rounded-xl border border-white/10 bg-black/65 px-3 py-3 font-['Cascadia_Code','Fira_Code','JetBrains_Mono','Consolas',monospace] text-[13px] leading-[1.7]"
       :class="standalone ? 'max-h-none' : 'max-h-[70dvh]'"
       :style="{ scrollbarColor: 'var(--accent-color, #79d9ff) transparent' }"
       @scroll="handleScroll"
@@ -139,7 +139,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useUIStore } from "@/stores/modules/ui/ui";
 import { isAndroid } from "@/utils/platform";
-import { Pause, Play, Trash2, ArrowDown, PictureInPicture2, Rocket } from "lucide-vue-next";
+import { Pause, Play, Trash2, ArrowDown, PictureInPicture2, Rocket } from "@lucide/vue";
 
 // standalone=true 时渲染在独立日志窗口里（隐藏“弹出独立窗口”按钮）
 const props = withDefaults(defineProps<{ standalone?: boolean }>(), { standalone: false });

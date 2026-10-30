@@ -7,6 +7,8 @@
 
 **LingChat - 一个灵动の人工智能聊天陪伴助手**
 
+**简体中文** · [English](README.en.md) · [日本語](README.ja.md)
+
 [📥 下载最新版本](https://github.com/SlimeBoyOwO/LingChat/releases) · [🐛 报告 Bug](https://github.com/SlimeBoyOwO/LingChat/issues) · [📖 源代码使用教程](https://github.com/SlimeBoyOwO/LingChat/blob/develop/others/document/%E6%BA%90%E4%BB%A3%E7%A0%81%E4%BD%BF%E7%94%A8.md)
 
 </div>
@@ -48,6 +50,12 @@
 
 ---
 
+## LingChat 是如何和你沟通的？
+
+![alt text](image-1.png)
+
+---
+
 ## 核心功能列表
 
 我们致力于提供最沉浸、最自由的 AI 陪伴体验。
@@ -55,12 +63,13 @@
 1. 🧠 永久记忆与独立存档：每个存档拥有独立永久记忆，可自由体验不同对话风格。
 2. 💓 自研情绪识别模型：自动判定 AI 每次对话的情绪，告别机械式回复。
 3. 👀 视觉感受与主动窥屏：自动识别桌面状态（工作/游戏/挂机），AI 会主动关心你。
-4. 🐱 完全自定义角色：支持导入自己的 OC 或喜欢的游戏人物，开启专属对话。
+4. 🐱 完全自定义角色：支持导入自己的 OC 或喜欢的游戏人物，支持静态图片或 Live2D
 5. 🌸 服装切换与互动：支持切换角色服装，并加入摸摸角色等趣味互动功能。
 6. ✨ 动态 UI 与沉浸式体验：表情、动作、气泡随 AI 情绪改变，搭配不同背景与音乐聊天。
-7. 🎧 真实语音与音效陪伴：支持接入 VITS 语音服务或对话音效，用耳语调动真心。
-8. 📜 多角色剧本与羁绊系统：支持导入剧本进行多角色对话，为角色编写羁绊剧情并解锁成就。
-9. 🍅 内置效率工具：自带番茄钟、日程、待办清单，AI 会根据状态贴心提醒。
+7. 🎧 真实语音与音效陪伴：支持接入绝大部分语音服务或对话音效
+8. 📜 多角色剧本与羁绊系统：支持导入剧本进行多角色对话，为角色编写羁绊剧情并解锁成就，支持Skill自动创作。
+9. 🍅 内置效率工具：自带日程、待办清单，AI 会根据状态贴心提醒。
+10. 📚 支持编写插件，接入其他软件如 QQ，Minecraft 等，实现更多功能。
 
 ---
 
@@ -108,7 +117,7 @@
 ### 🔧 准备工作
 
 > [!NOTE]
-> **API 申请：** 在 [DeepSeek 官方网站](https://platform.platform.com/) 或其他大模型平台申请属于你的 API 密钥，并确保账户内有余额。
+> **API 申请：** 在 [DeepSeek 官方网站](https://platform.deepseek.com/) 或其他大模型平台申请属于你的 API 密钥，并确保账户内有余额。
 
 ### 📦 第一步：下载与安装
 
@@ -169,6 +178,7 @@
 - **[Style-Bert-VITS2](https://github.com/litagin02/Style-Bert-VITS2)**：实现了 Bert-VITS 的语音合成与训练，极少数据量也能达到完美效果！
 - **[ProgrammingVTuberLogos](https://github.com/Aikoyori/ProgrammingVTuberLogos)**：提供了超可爱的标题风格灵感。
 - **[Emotion Training](https://github.com/SlimeBoyOwO/Emotion-Model-Trainer)**：用于实现 18 种短句情绪识别的人工智能模型训练。
+- **[BA-Click-Fx](https://github.com/CialloKing/ba-click-fx)**：BA粒子特效，很可爱
 
 ---
 
@@ -197,6 +207,8 @@
 <a href="https://github.com/SlimeBoyOwO/LingChat/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=SlimeBoyOwO/LingChat" />
 </a>
+
+![Alt](https://repobeats.axiom.co/api/embed/14581ef6577f5929864e0700d17c88253e01c8fa.svg "Repobeats analytics image")
 
 ## ⭐️ 喜欢这个项目吗？请给我们点一个 Star！
 

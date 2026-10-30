@@ -47,6 +47,8 @@ export default {
     noOutfits: "No outfits available yet",
     confirmSwitch:
       "Switching characters will clear the current character's memory — don't forget to save first if you need it!",
+    fav: "Favorite (move to front)",
+    unfav: "Unfavorite",
   },
   archiveProgress: {
     importing: "Importing",
@@ -93,6 +95,7 @@ export default {
   notification: {
     titlePlaceholder: "[Notification Title]",
     messagePlaceholder: "[Notification Content]",
+    mcMaidConnected: "Connected to the maid in Minecraft (*^▽^*)",
   },
   settingItem: {
     multilineHint: "Multi-line input supported",
@@ -122,7 +125,8 @@ export default {
     navCalendar: "Important Days",
     navProactive: "Proactive Chat",
     navToolCalls: "Tool Calls",
-    clockTip: '"Whatever you add here, the one behind the screen can see it too!"',
+    todoWidgetTitle: "TODO Widget",
+    todoWidgetTip: "Keep a small panel in the corner showing your nearest schedule and to-do",
     create: "New",
     titleSchedule: "Ring-a-ling Reminder",
     subtitleSchedule: "They'll remind you when the time comes~",
@@ -138,6 +142,19 @@ export default {
     titleDefault: "Ling's Reminder",
     subtitleDefault: "Leave the things you want her to remind you about here",
   },
+  todoWidget: {
+    pin: "Keep on top",
+    unpin: "Stop staying on top",
+    close: "Close",
+    overdue: "Overdue",
+    tomorrow: "Tomorrow",
+    dayUnit: "d",
+    tabSchedule: "Schedule",
+    tabTodo: "To-Do",
+    noDeadlineTodo: "No to-dos with a deadline",
+    emptySchedule: "No schedule yet",
+    emptyTodo: "No pending to-dos",
+  },
   toolCalls: {
     accessModeTitle: "Tool Access",
     accessModeHint:
@@ -148,6 +165,33 @@ export default {
       "Limits consecutive tool-execution rounds in one main-chat reply. One round can contain multiple tool calls.",
     maxToolRoundsUnit: "rounds",
     maxToolRoundsRange: "Range {min}–{max} · Default {default}",
+    toolRagTitle: "Search Tools on Demand",
+    toolRagHint:
+      "Sends only the common tools with each request; when the model needs one, it searches in a sentence first and then calls it, saving the context that every tool description would otherwise occupy. Turn off to send all authorized tools on every request.",
+    toolCacheCapacityTitle: "Tool Cache Size",
+    toolCacheCapacityHint:
+      "How many searched tools stay active per character. The search entry point and web search are always sent and do not count. Range {min}–{max}; 10 or fewer is recommended.",
+    toolCacheCapacityUnit: "tools",
+    toolRecommendTitle: "Tool Suggestions",
+    toolRecommendHint:
+      "Models often forget to use their tools. Choose how to nudge the model before each turn. Suggestions are a temporary hint, never written to the transcript, and the suggested tools are sent with that turn's request.",
+    toolRecommendModes: {
+      off: {
+        label: "Off",
+        description:
+          "No suggestions; the model decides on its own whether to search for or call tools.",
+      },
+      agent: {
+        label: "Agent",
+        description:
+          "A small decision agent reads the recent conversation and picks tools. Adds one small model call per turn.",
+      },
+      rag: {
+        label: "Retrieval",
+        description:
+          "Silently searches the tools with your message; only tools scored above the threshold are suggested. No extra model call, just local compute.",
+      },
+    },
     accessModes: {
       manual: {
         label: "Ask Every Time",
@@ -240,15 +284,14 @@ export default {
       "Searches with the Codex subscription you signed into in LLM Providers — no API Key needed",
     kimiHint:
       "The API Key may be left blank when the active chat provider is official Kimi Code; its credential is reused securely. Otherwise, enter a separate key.",
-    providerDeepSeek: "DeepSeek Responses",
+    providerDeepSeek: "DeepSeek Web Search",
     customHint:
       "Custom endpoints must support the Kimi /search protocol (POST JSON field: text_query)",
     apiKeyPlaceholder: "Enter the custom endpoint API Key",
     kimiApiKeyPlaceholder: "Optional when reusing the active Kimi Code credential",
     dsApiKeyPlaceholder: "Enter your DeepSeek API Key",
-    dsModel: "DeepSeek Model",
     dsHint:
-      "Uses DeepSeek's server-side web_search via the Responses API. Requires a separate DeepSeek API key; the answer is synthesized by DeepSeek.",
+      "Searches via DeepSeek's /v1/tools/search endpoint. Requires a separate DeepSeek API key.",
     baseUrl: "Search Service URL",
     proxyEnable: "Access the search service via proxy (e.g. v2rayN)",
     maxResults: "Max Results",
@@ -284,6 +327,31 @@ export default {
     },
     otherToolsHint:
       "Once enabled, they can use these tools on their own while chatting (applies after saving)",
+    embedding: {
+      cloudToggle: "Use a cloud embedding model (smarter)",
+      cloudToggleHint:
+        "The local small model works offline by default. Turn this on to compute note and tool vectors with the cloud model below.",
+      privacyNotice: "Note contents will be sent to a third-party model service for processing.",
+      provider: "Provider",
+      providerOpenai: "OpenAI compatible (including custom endpoints)",
+      providerGemini: "Gemini",
+      model: "Model",
+      modelPlaceholder: "e.g. text-embedding-3-small, bge-m3",
+      baseUrl: "Base URL (leave empty for the official endpoint)",
+      baseUrlPlaceholder: "e.g. https://api.siliconflow.cn/v1",
+      apiKey: "API Key",
+      timeout: "Timeout per request (seconds)",
+      test: "Test connection",
+      rebuild: "Re-embed everything",
+      testSuccess: "Connection OK: {backend}, dimension {dimension}, {elapsed} ms",
+      testFailed: "Test failed: {message}",
+      rebuildStarted: "Background warm-up started; progress updates automatically",
+      warmingProgress: "Embedding {done}/{total}, {failed} failed",
+      warmingFinished: "Embedding finished, {failed} failed",
+      alertTitle: "Note semantic search is temporarily disabled",
+      alertMessage:
+        "Cloud embedding ({backend}) kept failing: {reason}. Restart or save the settings again to recover.",
+    },
     fileOpsAllowAnyPath:
       "Allow access outside the sandbox (they can read/write files beyond data/)",
     fileOpsAllowAnyPathHint:
@@ -317,8 +385,8 @@ export default {
       schedule: "Schedule & To-dos (view, add, update, delete)",
       memory: "Notes & Memory (their own little notebook)",
       character: "Character Switching (list/switch present characters)",
-      scene: "Scene Switching (list/switch scenes)",
-      status: "Status Queries (current/scene status)",
+      scene: "Scene Switching (list/switch scenes, background effects)",
+      status: "Status Queries (current/scene status, weather)",
       clock: "Current Time (device local time)",
       skills: "Skills (let them read skill instructions)",
       media: "Media Recognition (read images and videos with the vision model)",
@@ -327,6 +395,7 @@ export default {
     },
     tools: {
       web_search: "Web Search",
+      tool_search: "Search Tools",
       get_current_time: "Current Time",
       schedule_get_all: "View Schedule",
       schedule_add_todo: "Add To-do",
@@ -339,6 +408,8 @@ export default {
       memory_delete_note: "Delete Note",
       character_list: "List Characters",
       character_switch: "Switch Character",
+      character_get_clothes: "Get Outfit",
+      character_set_clothes: "Change Outfit",
       scene_list: "List Scenes",
       scene_switch: "Switch Scene",
       status_get_current: "Current Status",
@@ -370,6 +441,11 @@ export default {
     priorityLabel: "Priority:",
     newGroup: "New Task Group",
     newTask: "New To-Do Task",
+    editTask: "Edit To-Do Task",
+    reminderOff: "No reminder",
+    reminderMinutes: "{count} min before",
+    reminderHours: "{count} h before",
+    reminderDays: "{count} d before",
   },
   schedulePage: {
     emptyGroups: "No schedule themes yet — click the top-right button to create one!",
@@ -386,6 +462,10 @@ export default {
     save: "Save",
     success: "Saved successfully",
     error: "Error: {message}",
+    todoReminderStyle: "To-Do reminder style",
+    todoReminderStyleRole: "Character speaks",
+    todoReminderStyleToast: "System notification",
+    growthRangeHint: "≈ interest grows {min} ~ {max} per cycle (derived from the interval above)",
   },
   calendarPage: {
     yearMonth: "{month}/{year}",
@@ -486,6 +566,64 @@ export default {
     statusPaused: "Paused",
     statusCompleted: "Completed",
     defaultWorkLabel: "Work",
+  },
+  affection: {
+    title: "Affection",
+    noData: "No data yet",
+    fondness: "Fondness",
+    trust: "Trust",
+    intimacy: "Intimacy",
+    rapport: "Rapport",
+    interest: "Interest",
+    longing: "Longing",
+    average: "6-axis average",
+    recentChange: "Latest change",
+    nextTier: '{points} pts to "{tier}"',
+    maxTier: "Overflowing — max tier reached",
+    introTitle: "About affection",
+    introEval:
+      "Affection is adjusted automatically by periodic AI evaluations of your conversations.",
+    introPersist: "Values are saved with the character, shared across saves and not rolled back.",
+    introOverflow:
+      'Values may overflow: above 100 is "Overflowing" (vertex glows on the radar); below 0 is "Estranged" (shown in cold colors).',
+    negativeTitle: "Negative feelings",
+    radarAffection: "Affection",
+    radarNegative: "Negative",
+    introNegative:
+      "Negative feelings are tracked on six axes: they build up when the character is offended or hurt and fade when soothed; any strong axis affects attitude and tone.",
+    tier: {
+      estranged: "Estranged",
+      acquainted: "Just Met",
+      plain: "Casual",
+      familiar: "Familiar",
+      deep: "Deep",
+      blazing: "Blazing",
+      overflow: "Overflowing",
+    },
+    dimDesc: {
+      fondness: "Overall liking; sweetens the tone of voice",
+      trust: "Depth of confiding and honest talk",
+      intimacy: "Acceptance of close distance and physical contact",
+      rapport: "Catching jokes and reading between the lines",
+      interest: "Curiosity about your topics; asks questions first",
+      longing: "Reaction strength when reunited after long apart",
+    },
+    neg: {
+      anger: "Anger",
+      hurt: "Hurt",
+      disappointment: "Disappointment",
+      indifference: "Indifference",
+      jealousy: "Jealousy",
+      estrangement: "Estrangement",
+    },
+    negDesc: {
+      anger: "Anger when offended",
+      hurt: "Hurt accumulated from being wounded",
+      disappointment: "Disappointment from broken expectations",
+      indifference: "Coldness when disheartened",
+      jealousy: "Jealousy and possessiveness triggered",
+      estrangement: "Tendency to distance from you",
+    },
   },
   resourceSync: {
     totalChanges: "{count} changes in total",
