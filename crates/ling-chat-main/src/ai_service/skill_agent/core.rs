@@ -56,6 +56,8 @@ pub struct SkillAgentRunContext {
     pub bound_script_key: std::sync::Mutex<Option<String>>,
     /// 这一轮算上下文预算用的模型窗口（token），由命令层解析 `/models` 得到；读不到用默认值（见 `stage::budget::DEFAULT_CONTEXT_WINDOW`）。
     pub context_window: usize,
+    /// 运行时续写模式：写正文那一项的指令换成按玩家轨迹写的版本。
+    pub runtime_rewrite: bool,
 }
 
 impl SkillAgentRunContext {
@@ -86,6 +88,16 @@ pub async fn run_chat(
     history: Vec<LlmMessage>,
     cancelled: CancelFlag,
 ) -> Result<(), String> {
+    run_chat_with_plan(ctx, history, cancelled, None).await
+}
+
+/// 同 [`run_chat`]，但可强制指定计划（运行时续写用）：给了就不再走一遍路由。
+pub async fn run_chat_with_plan(
+    ctx: SkillAgentRunContext,
+    history: Vec<LlmMessage>,
+    cancelled: CancelFlag,
+    forced_plan: Option<router::RoutePlan>,
+) -> Result<(), String> {
     let approval_mode = if ctx.config.auto_approve_commands {
         "命令自动执行（无需确认）"
     } else {
@@ -111,30 +123,35 @@ pub async fn run_chat(
         }
     }
 
-    let user_msg = history
-        .iter()
-        .rev()
-        .find(|m| m.role == "user")
-        .map(|m| m.content.clone())
-        .unwrap_or_default();
-    let recent = history::recent_turns(&history, 2);
-    let queue_text = ctx
-        .stage_snapshot
-        .script_dir
-        .as_deref()
-        .map(|d| std::fs::read_to_string(d.join(stage::QUEUE_REL_PATH)).unwrap_or_default())
-        .unwrap_or_default();
-    let plan = router::route(
-        &ctx.llm,
-        &router::RouteInput {
-            snapshot: &ctx.stage_snapshot,
-            queue: &queue_text,
-            recent: &recent,
-            user_msg: &user_msg,
-            skills_dir: &ctx.skills_dir,
+    let plan = match forced_plan {
+        Some(p) => p,
+        None => {
+            let user_msg = history
+                .iter()
+                .rev()
+                .find(|m| m.role == "user")
+                .map(|m| m.content.clone())
+                .unwrap_or_default();
+            let recent = history::recent_turns(&history, 2);
+            let queue_text = ctx
+                .stage_snapshot
+                .script_dir
+                .as_deref()
+                .map(|d| std::fs::read_to_string(d.join(stage::QUEUE_REL_PATH)).unwrap_or_default())
+                .unwrap_or_default();
+            router::route(
+                &ctx.llm,
+                &router::RouteInput {
+                    snapshot: &ctx.stage_snapshot,
+                    queue: &queue_text,
+                    recent: &recent,
+                    user_msg: &user_msg,
+                    skills_dir: &ctx.skills_dir,
+                },
+            )
+            .await
         },
-    )
-    .await;
+    };
 
     let creates_chapters = plan
         .items
@@ -172,6 +189,8 @@ pub async fn run_chat(
             .iter()
             .any(|(_, _, h)| matches!(h, role::Handoff::Prerequisite { .. }));
 
+    // 技能索引一轮只扫一次：一轮内技能库不会变，逐项重扫只是重复 canonicalize + 读全文。
+    let skills_xml: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     let mut cursor = 0usize;
     while cursor < planned.len() {
         let (idx, task, handoff) = planned[cursor];
@@ -216,16 +235,17 @@ pub async fn run_chat(
         let target = plan.items.get(idx).map(|i| i.target.as_str()).unwrap_or("");
 
         let skills_block = if allowed.contains(&"read_skill") {
-            skills::build_skills_xml(&skills::find_all_skills(&ctx.skills_dir))
+            skills_xml
+                .get_or_init(|| skills::build_skills_xml(&skills::find_all_skills(&ctx.skills_dir)))
+                .as_str()
         } else {
-            String::new()
+            ""
         };
 
-        let task_block = stage::prompt::build_task_block(&stage::prompt::TaskBlockInput {
+        let mut parts = stage::prompt::build_task_parts(&stage::prompt::TaskBlockInput {
             task,
             handoff,
             plan: &plan,
-            user_msg: &user_msg,
             skills_dir: &ctx.skills_dir,
             land: creates_chapters,
             item_index: idx,
@@ -233,12 +253,26 @@ pub async fn run_chat(
             is_last,
             allowed,
         });
+        // 运行时续写：任务块里的行为指令换成按玩家轨迹写的版本（编辑器路径 runtime_rewrite 为假，不受影响）。
+        let runtime_directive = task.runtime_directive().filter(|_| ctx.runtime_rewrite);
+        if let Some(rt) = runtime_directive {
+            let before = parts.fixed.clone();
+            parts.fixed = parts.fixed.replace(task.directive(), rt);
+            parts.ordered = parts.ordered.replace(task.directive(), rt);
+            // replace 依赖指令原文逐字出现在任务块里；prompt.rs 改了拼装方式就会静默失效，留一条日志。
+            if parts.fixed == before {
+                tracing::warn!(
+                    "[skill_agent] 运行时续写指令未生效：任务块里找不到原指令原文（任务={:?}）",
+                    task
+                );
+            }
+        }
         let system_prompt = history::build_system_prompt(
             &ctx.config,
             allowed,
-            &skills_block,
+            skills_block,
             &script_block,
-            &task_block,
+            &parts.fixed,
             &ctx.sandbox_dir,
             &ctx.skills_dir,
         );
@@ -260,7 +294,7 @@ pub async fn run_chat(
             }
         );
         let mut messages =
-            item_messages(system_prompt, &base_history, &digest, run_materials, &own);
+            item_messages(system_prompt, &base_history, &digest, run_materials, &parts.varying, &own);
 
         let text = run_item_tools(
             &ctx,
@@ -520,11 +554,12 @@ fn save_queue(
 }
 
 /// 拼一项请求的消息表：system + 历史 + 交接材料（前面各项 + 状态）+ 本轮动态材料 + 本项任务书（放最后，走 user 角色）。
-fn item_messages(
+pub(super) fn item_messages(
     system_prompt: String,
     base_history: &[LlmMessage],
     handoff_digest: &str,
     run_materials: String,
+    varying: &str,
     own_task: &str,
 ) -> Vec<LlmMessage> {
     let mut messages = Vec::with_capacity(base_history.len() + 3);
@@ -535,6 +570,9 @@ fn item_messages(
     }
     if !run_materials.is_empty() {
         messages.push(LlmMessage::user(run_materials));
+    }
+    if !varying.is_empty() {
+        messages.push(LlmMessage::user(varying.to_string()));
     }
     messages.push(LlmMessage::user(own_task.to_string()));
     messages

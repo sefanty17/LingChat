@@ -468,6 +468,16 @@ export function initializeTauriEventListeners() {
     );
   });
 
+  // 章节末尾后端在调 AI 续写下一章：on=true 显示全屏等待遮罩，on=false 收起
+  listen("script:generating", (event) => {
+    const payload = event.payload as { on?: boolean; chapter?: string };
+    console.log("[Tauri] 收到 script:generating", payload);
+    useGameStore().setScriptGenerating({
+      on: !!payload?.on,
+      chapter: payload?.chapter ?? "",
+    });
+  });
+
   listen("script:free-dialogue", (event) => {
     eventQueue.addEvent(asEvent(event.payload, { type: "free_dialogue", defaultDuration: 0 }));
   });
@@ -592,7 +602,7 @@ export function initializeTauriEventListeners() {
   });
 
   console.log(
-    "[Tauri] 事件监听已注册（ai + ai:thinking_progress + tts:cleanup + adventure + 自动存档 + affection:changed + 13 个剧本事件 + character:switch + scene:switch + character:clothes-changed + character:full-switch）",
+    "[Tauri] 事件监听已注册（ai + ai:thinking_progress + tts:cleanup + adventure + 自动存档 + affection:changed + 14 个剧本事件 + character:switch + scene:switch + character:clothes-changed + character:full-switch）",
   );
 }
 

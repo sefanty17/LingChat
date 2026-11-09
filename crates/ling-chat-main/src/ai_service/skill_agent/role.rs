@@ -121,6 +121,16 @@ impl TaskKind {
         }
     }
 
+    /// 运行时续写时的指令覆盖：只有 DraftChapter 有差异。
+    pub const fn runtime_directive(self) -> Option<&'static str> {
+        match self {
+            TaskKind::DraftChapter => {
+                Some(include_str!("prompts/role_directive_draft_chapter_runtime.md"))
+            },
+            _ => None,
+        }
+    }
+
     /// 这一轮能用的工具；角色级集合之外只有「改 YAML」多一个 `delete_file`（删章要能整份删掉 `Chapters/08.yaml`）。
     pub const fn tools(self) -> &'static [&'static str] {
         match self {

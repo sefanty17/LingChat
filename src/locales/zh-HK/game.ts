@@ -27,6 +27,10 @@ export default {
     choiceRequired: "請撳一個選項",
     inputNotAllowed: "而家輸入唔到",
   },
+  // 章節結尾 AI 續寫下一章時嘅全屏等待遮罩
+  scriptGenerating: {
+    title: "正在續寫下一章…",
+  },
   avatar: {
     live2dUnavailable: "Live2D 暫時用唔到",
   },

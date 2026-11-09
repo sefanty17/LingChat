@@ -29,6 +29,12 @@ export interface FreeDialogueInfo {
   currentRound: number;
 }
 
+/** 章节末尾 AI 续写下一章的等待状态（script:generating 事件） */
+export interface ScriptGeneratingState {
+  on: boolean;
+  chapter: string;
+}
+
 export interface ScriptInfo {
   scriptName: string;
   currentChapterName: string;
@@ -143,6 +149,9 @@ export interface GameState {
 
   /** 本次会话绑定的存档 id（读取/创建/更新存档成功后更新）；null = 本次会话还没落过盘 */
   currentSaveId: number | null;
+
+  /** 后端正在续写下一章（全屏等待遮罩的数据源） */
+  scriptGenerating: ScriptGeneratingState;
 }
 
 export const state: GameState = {
@@ -174,4 +183,6 @@ export const state: GameState = {
 
   scriptReadCursor: null,
   currentSaveId: null,
+
+  scriptGenerating: { on: false, chapter: "" },
 };

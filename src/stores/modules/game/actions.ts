@@ -105,6 +105,14 @@ export const actions = {
     this.loadingComplete = v;
   },
 
+  /** 更新「续写下一章」等待状态（script:generating 事件） */
+  setScriptGenerating(this: GameState, payload: { on: boolean; chapter: string }) {
+    this.scriptGenerating = {
+      on: !!payload.on,
+      chapter: payload.chapter ?? "",
+    };
+  },
+
   // 清除场景（更新 store，API 调用由组件负责）
   clearCurrentScene(this: GameState) {
     this.currentScene = null;

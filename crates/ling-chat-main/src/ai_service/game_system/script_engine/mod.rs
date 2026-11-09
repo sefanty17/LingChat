@@ -5,10 +5,12 @@
 //! - `Chapter` — wraps a chapter YAML and runs its events
 //! - `EventsHandler` — sequential event processor within a chapter
 //! - `events` — event trait, registry, and all concrete event handlers
+//! - `director` — runtime chapter continuation (player trace → generated chapter)
 //! - `utils` — static helper functions for role lookup, variables, etc.
 //! - `responses` — Tauri event payload types
 
 pub mod chapter;
+pub mod director;
 pub mod events;
 pub mod events_handler;
 pub mod responses;

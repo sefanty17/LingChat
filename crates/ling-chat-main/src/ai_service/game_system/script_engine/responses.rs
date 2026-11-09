@@ -26,7 +26,10 @@ pub mod event_names {
     pub const SCRIPT_END: &str = "script:end";
     pub const SCRIPT_FREE_DIALOGUE: &str = "script:free-dialogue";
     pub const SCRIPT_PROGRESS: &str = "script:progress";
+    pub const SCRIPT_GENERATING: &str = "script:generating";
 }
+
+pub use event_names::SCRIPT_GENERATING;
 
 // ============================================================
 // Payload types (fields match frontend `src/types/script.ts`)
@@ -203,4 +206,10 @@ pub struct ScriptProgressPayload {
     pub event_index: i32,
     pub line_count: i32,
     pub vars: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GeneratingPayload {
+    pub on: bool,
+    pub chapter: String,
 }

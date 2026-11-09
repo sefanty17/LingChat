@@ -1,9 +1,10 @@
 //! 章节结束事件 —— 决定下一章。
 //!
-//! 三种子类型：
+//! 四种子类型：
 //! - `linear`：直接返回 `next_chapter` / `next` 字段
 //! - `branching`：对 `script_status.vars` 求值条件来选择分支
 //! - `ai_judged`：调用 LLM 在命名选项中决定（需 LLM）
+//! - `generated`：按玩家轨迹续写下一章（见 `script_engine::director`）
 
 use std::sync::Arc;
 
@@ -11,6 +12,9 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde_json::Value;
 
+use crate::ai_service::game_system::script_engine::director::{
+    DirectorConfig, generate_next_chapter,
+};
 use crate::ai_service::game_system::script_engine::events::{
     ScriptContext, ScriptEvent, evaluate_condition, register_event,
 };
@@ -24,6 +28,8 @@ pub struct ChapterEndEvent {
     next_chapter: Option<String>,
     options: Vec<Value>,
     prompt: Option<String>,
+    /// 事件原始字典：续写配置（fallback / max_gen / mode）从它读。
+    raw: Value,
 }
 
 impl ChapterEndEvent {
@@ -51,6 +57,7 @@ impl ChapterEndEvent {
                 .get("prompt")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
+            raw: data.clone(),
         }
     }
 }
@@ -110,6 +117,21 @@ impl ScriptEvent for ChapterEndEvent {
                     )
                 })?;
                 self.call_llm_for_judgment(llm, ctx).await?
+            },
+            "generated" => {
+                let settings = {
+                    let gs = ctx.game_status.lock().await;
+                    gs.script_status
+                        .as_ref()
+                        .map(|s| s.settings.clone())
+                        .unwrap_or_default()
+                };
+                let cfg = DirectorConfig::resolve(&self.raw, &settings);
+                match generate_next_chapter(ctx, &cfg).await {
+                    Ok(Some(id)) => id,
+                    Ok(None) => cfg.fallback.clone().unwrap_or_else(|| "end".to_string()),
+                    Err(e) => return Err(e),
+                }
             },
             _ => {
                 tracing::warn!(

@@ -27,6 +27,10 @@ export default {
     choiceRequired: "Please pick an option",
     inputNotAllowed: "Input isn't allowed right now",
   },
+  // Full-screen wait overlay while the AI writes the next chapter
+  scriptGenerating: {
+    title: "Writing the next chapter…",
+  },
   avatar: {
     live2dUnavailable: "Live2D unavailable",
   },

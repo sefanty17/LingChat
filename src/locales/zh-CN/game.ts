@@ -26,6 +26,10 @@ export default {
     choiceRequired: "请点击一个选项",
     inputNotAllowed: "当前无法输入",
   },
+  // 章节末尾 AI 续写下一章时的全屏等待遮罩
+  scriptGenerating: {
+    title: "正在续写下一章…",
+  },
   relationGuard: {
     tipBar: "先给「{name}」补一句对 ta 的认知",
     tipBarMulti: "还缺：{names} 对 ta 的认知",

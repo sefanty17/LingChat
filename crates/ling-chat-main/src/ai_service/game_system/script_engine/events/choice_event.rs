@@ -130,6 +130,11 @@ impl ScriptEvent for ChoiceEvent {
         };
 
         // 写回可能被修改的 script_status
+        crate::ai_service::game_system::script_engine::director::trace::push_choice(
+            &mut script_status,
+            &user_choice,
+            self.allow_free,
+        );
         ctx.game_status.lock().await.script_status = Some(script_status);
 
         if !matched {

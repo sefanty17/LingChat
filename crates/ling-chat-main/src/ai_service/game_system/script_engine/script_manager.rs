@@ -510,9 +510,18 @@ impl ScriptManager {
             }
 
             // Update tracking fields
-            if let Some(ref mut ss) = ctx.game_status.lock().await.script_status {
-                ss.current_chapter_key = next_chapter.clone();
-                ss.current_event_process = 0;
+            {
+                let mut guard = ctx.game_status.lock().await;
+                let line_count = guard.line_list.len();
+                if let Some(ref mut ss) = guard.script_status {
+                    ss.current_chapter_key = next_chapter.clone();
+                    ss.current_event_process = 0;
+                    crate::ai_service::game_system::script_engine::director::trace::push_chapter_mark(
+                        ss,
+                        &next_chapter,
+                        line_count,
+                    );
+                }
             }
 
             next_chapter = chapter.run(ctx).await?;

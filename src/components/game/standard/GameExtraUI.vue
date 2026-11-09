@@ -24,6 +24,9 @@
 
     <!-- 8. 音频频谱可视化（右下角，与左下角声效按钮对称） -->
     <SpectrumVisualizer />
+
+    <!-- 9. 续写下一章的等待遮罩（盖住对话与选项） -->
+    <ScriptGeneratingOverlay />
   </div>
 </template>
 
@@ -36,4 +39,5 @@ import ScriptFreeDialogueDisplay from "./extra/ScriptFreeDialogueDisplay.vue";
 import SoundEffectPanel from "./extra/SoundEffectPanel.vue";
 import AffectionChangeFloat from "./extra/AffectionChangeFloat.vue";
 import SpectrumVisualizer from "./extra/SpectrumVisualizer.vue";
+import ScriptGeneratingOverlay from "./extra/ScriptGeneratingOverlay.vue";
 </script>

@@ -384,6 +384,7 @@ pub async fn editor_agent_start_chat(
         stage_snapshot,
         bound_script_key: std::sync::Mutex::new(None),
         context_window,
+        runtime_rewrite: false,
     };
 
     let cancelled = state.skill_agent.cancelled.clone();
