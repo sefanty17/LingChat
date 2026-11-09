@@ -2,6 +2,10 @@
 
 use serde_json::{Map, Value};
 
+/// 默认最多续写多少段。作者可以用事件里的 `max_gen` 或 `story_config.yaml` 的
+/// `dynamic.max_generated` 覆盖；写 0 表示关掉续写（直接走 fallback）。
+pub const DEFAULT_MAX_GEN: u32 = 20;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirectorMode {
     /// 正式：走 Skill Agent 写章节
@@ -14,7 +18,8 @@ pub enum DirectorMode {
 pub struct DirectorConfig {
     /// 失败去处：None = "end"，Some(id) = 跳到该章
     pub fallback: Option<String>,
-    /// 本剧本累计最多生成多少章；None = 不限
+    /// 本剧本累计最多生成多少段；`resolve` 总会给出值（缺省 `DEFAULT_MAX_GEN`），
+    /// 作者写 `0` 即等于关掉续写。
     pub max_gen: Option<u32>,
     pub mode: DirectorMode,
 }
@@ -34,7 +39,8 @@ impl DirectorConfig {
         let max_gen = event
             .get("max_gen")
             .and_then(as_u32)
-            .or_else(|| dynamic.and_then(|d| d.get("max_generated")).and_then(as_u32));
+            .or_else(|| dynamic.and_then(|d| d.get("max_generated")).and_then(as_u32))
+            .or(Some(DEFAULT_MAX_GEN));
 
         let mode = event
             .get("mode")
@@ -62,5 +68,34 @@ fn as_u32(value: &Value) -> Option<u32> {
         Value::Number(n) => n.as_u64().map(|v| v.min(u32::MAX as u64) as u32),
         Value::String(s) => s.trim().parse::<u32>().ok(),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn max_gen_defaults_to_twenty_and_event_wins() {
+        let empty = Map::new();
+        assert_eq!(
+            DirectorConfig::resolve(&Value::Null, &empty).max_gen,
+            Some(DEFAULT_MAX_GEN)
+        );
+        let ev = serde_json::json!({ "max_gen": 3 });
+        assert_eq!(DirectorConfig::resolve(&ev, &empty).max_gen, Some(3));
+        let zero = serde_json::json!({ "max_gen": 0 });
+        assert_eq!(DirectorConfig::resolve(&zero, &empty).max_gen, Some(0));
+    }
+
+    #[test]
+    fn mode_falls_back_to_agent() {
+        let empty = Map::new();
+        assert_eq!(
+            DirectorConfig::resolve(&Value::Null, &empty).mode,
+            DirectorMode::Agent
+        );
+        let ev = serde_json::json!({ "mode": "template" });
+        assert_eq!(DirectorConfig::resolve(&ev, &empty).mode, DirectorMode::Template);
     }
 }

@@ -32,7 +32,10 @@ export interface FreeDialogueInfo {
 /** 章节末尾 AI 续写下一章的等待状态（script:generating 事件） */
 export interface ScriptGeneratingState {
   on: boolean;
+  /** 内部章节 id（只用于日志，不显示给玩家） */
   chapter: string;
+  /** 本剧本第几段续写，从 1 起；0 = 未知 */
+  seq: number;
 }
 
 export interface ScriptInfo {
@@ -184,5 +187,5 @@ export const state: GameState = {
   scriptReadCursor: null,
   currentSaveId: null,
 
-  scriptGenerating: { on: false, chapter: "" },
+  scriptGenerating: { on: false, chapter: "", seq: 0 },
 };

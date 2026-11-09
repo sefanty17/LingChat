@@ -30,6 +30,7 @@ export default {
   // 章節結尾 AI 續寫下一章時嘅全屏等待遮罩
   scriptGenerating: {
     title: "正在續寫下一章…",
+    stage: "第 {n} 段",
   },
   avatar: {
     live2dUnavailable: "Live2D 暫時用唔到",

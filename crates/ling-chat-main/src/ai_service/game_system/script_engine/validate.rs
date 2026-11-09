@@ -1457,6 +1457,28 @@ fn check_chapter_end(
                 )),
             }
         },
+        // 续写：下一章在运行时由 AI 生出来，校验期本来就没有静态去向，因此不登记边。
+        "generated" => {
+            if obj.get("next").is_some() || obj.get("next_chapter").is_some() {
+                diags.push(Diagnostic::event(
+                    Severity::Warn,
+                    "chapter_end.generated_ignores_next",
+                    cid,
+                    i,
+                    "end_type 是 generated 时 next / next_chapter 会被忽略（下一章由 AI 续写）"
+                        .to_string(),
+                ));
+            }
+            if obj.get("options").is_some() {
+                diags.push(Diagnostic::event(
+                    Severity::Warn,
+                    "chapter_end.generated_ignores_options",
+                    cid,
+                    i,
+                    "end_type 是 generated 时 options 会被忽略（下一章由 AI 续写）".to_string(),
+                ));
+            }
+        },
         "branching" | "ai_judged" => {
             let options = obj.get("options").and_then(|v| v.as_array());
             let Some(options) = options else {
@@ -1601,7 +1623,7 @@ fn check_chapter_end(
                     cid,
                     i,
                     format!(
-                        "未知的结束方式「{}」，运行时会直接结束整个剧本；可用值：linear / branching / ai_judged",
+                        "未知的结束方式「{}」，运行时会直接结束整个剧本；可用值：linear / branching / ai_judged / generated",
                         other
                     ),
                 )

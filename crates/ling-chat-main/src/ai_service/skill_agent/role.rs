@@ -121,11 +121,30 @@ impl TaskKind {
         }
     }
 
-    /// 运行时续写时的指令覆盖：只有 DraftChapter 有差异。
+    /// 运行时续写时的指令覆盖：DraftChapter / WriteChapter 各有一版。
     pub const fn runtime_directive(self) -> Option<&'static str> {
         match self {
             TaskKind::DraftChapter => {
                 Some(include_str!("prompts/role_directive_draft_chapter_runtime.md"))
+            },
+            TaskKind::WriteChapter => {
+                Some(include_str!("prompts/role_directive_write_chapter_runtime.md"))
+            },
+            _ => None,
+        }
+    }
+
+    /// 运行时续写时的范围提示覆盖：只有 WriteChapter 需要（编辑器那版要求把上一章
+    /// 的 chapter_end 接过来，运行时续写恰恰不能这么做）。
+    pub fn runtime_scope_note(self, target: &str) -> Option<String> {
+        match self {
+            TaskKind::WriteChapter => {
+                let t = target.trim();
+                let id = if t.is_empty() { "<id>" } else { t };
+                Some(format!(
+                    include_str!("prompts/role_scope_note_write_chapter_runtime.md"),
+                    id = id
+                ))
             },
             _ => None,
         }
@@ -477,5 +496,25 @@ pub fn render_handoff(handoff: Handoff) -> String {
             )
         },
         Handoff::Explain(why) => format!("本轮不做这件事：{why}。把原因告诉用户，不要动任何文件。"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_chapter_runtime_scope_note_uses_target_id() {
+        let note = TaskKind::WriteChapter.runtime_scope_note("__gen/c001").unwrap();
+        assert!(note.contains("Chapters/__gen/c001.yaml"), "{}", note);
+        assert!(!note.contains("{id}"), "占位符没被替换: {}", note);
+    }
+
+    #[test]
+    fn only_draft_and_write_chapter_have_runtime_directive() {
+        assert!(TaskKind::DraftChapter.runtime_directive().is_some());
+        assert!(TaskKind::WriteChapter.runtime_directive().is_some());
+        assert!(TaskKind::Outline.runtime_directive().is_none());
+        assert!(TaskKind::ReviseChapter.runtime_scope_note("01").is_none());
     }
 }

@@ -30,6 +30,7 @@ export default {
   // Full-screen wait overlay while the AI writes the next chapter
   scriptGenerating: {
     title: "Writing the next chapter…",
+    stage: "Part {n}",
   },
   avatar: {
     live2dUnavailable: "Live2D unavailable",

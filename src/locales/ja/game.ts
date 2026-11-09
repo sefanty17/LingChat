@@ -29,6 +29,7 @@ export default {
   // 章の終わりに AI が次の章を執筆している間の全画面待機オーバーレイ
   scriptGenerating: {
     title: "次の章を執筆中…",
+    stage: "第 {n} 幕",
   },
   avatar: {
     live2dUnavailable: "Live2D を利用できません",

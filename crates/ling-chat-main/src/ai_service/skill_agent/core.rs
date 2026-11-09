@@ -267,6 +267,21 @@ pub async fn run_chat_with_plan(
                 );
             }
         }
+        // 运行时续写：范围提示也换掉（编辑器那版会要求改上一章的 chapter_end，续写时不能那么干）。
+        if ctx.runtime_rewrite {
+            if let Some(note) = task.runtime_scope_note(target.trim()) {
+                let orig = task.scope_note(target.trim());
+                let before = parts.fixed.clone();
+                parts.fixed = parts.fixed.replace(&orig, &note);
+                parts.ordered = parts.ordered.replace(&orig, &note);
+                if parts.fixed == before {
+                    tracing::warn!(
+                        "[skill_agent] 运行时范围提示未生效：任务块里找不到原范围提示原文（任务={:?}）",
+                        task
+                    );
+                }
+            }
+        }
         let system_prompt = history::build_system_prompt(
             &ctx.config,
             allowed,

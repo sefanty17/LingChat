@@ -212,4 +212,6 @@ pub struct ScriptProgressPayload {
 pub struct GeneratingPayload {
     pub on: bool,
     pub chapter: String,
+    /// 这是本剧本第几段续写（从 1 起）；0 表示未开始/未知。
+    pub seq: u32,
 }

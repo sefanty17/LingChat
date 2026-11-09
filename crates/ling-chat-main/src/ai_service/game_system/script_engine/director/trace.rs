@@ -58,6 +58,11 @@ pub struct TraceLine {
     pub kind: TraceKind,
     pub speaker: Option<String>,
     pub text: String,
+    /// 这条台词在 `GameStatus.line_list` 里的下标。
+    ///
+    /// 章节标记记的是**原始**下标，而 `lines` 是筛过的（Plot/System 提示被丢掉），
+    /// 所以切章时必须靠这个字段换算，不能直接拿原始下标当 `lines` 的下标用。
+    pub raw: usize,
 }
 
 /// 一次续写前采集到的完整玩家轨迹。
@@ -103,7 +108,12 @@ impl PlayTrace {
             None => (String::new(), String::new()),
         };
 
-        let lines = gs.line_list.iter().filter_map(classify).collect();
+        let lines = gs
+            .line_list
+            .iter()
+            .enumerate()
+            .filter_map(|(raw, line)| classify(raw, line))
+            .collect();
 
         Self {
             script_key,
@@ -183,11 +193,13 @@ impl PlayTrace {
     fn chapter_ranges(&self) -> Vec<(usize, usize)> {
         let total = self.lines.len();
         let n = self.chapters.len();
+        // 标记记的是原始台词下标，`lines` 是筛过的，先换算成 `lines` 里的位置。
+        let at = |raw: usize| self.lines.partition_point(|l| l.raw < raw).min(total);
         (0..n)
             .map(|i| {
-                let start = self.chapters[i].line.min(total);
+                let start = at(self.chapters[i].line);
                 let end = if i + 1 < n {
-                    self.chapters[i + 1].line.min(total)
+                    at(self.chapters[i + 1].line)
                 } else {
                     total
                 };
@@ -330,7 +342,7 @@ fn decode_list<T: serde::de::DeserializeOwned>(value: Option<&Value>) -> Vec<T> 
 /// 旁白信封（`{旁白:…}`）优先于 attribute 判定：引擎写旁白时走
 /// `PromptLine::new(PromptRole::Narrator, ..)`，落表的 attribute 仍是 User，
 /// 只靠 attribute 会把旁白错记成玩家台词。
-fn classify(line: &GameLine) -> Option<TraceLine> {
+fn classify(raw: usize, line: &GameLine) -> Option<TraceLine> {
     let content = line.base.content.as_str();
     if content.trim().is_empty() {
         return None;
@@ -347,6 +359,7 @@ fn classify(line: &GameLine) -> Option<TraceLine> {
             kind: TraceKind::Narration,
             speaker: None,
             text: inner.to_string(),
+            raw,
         });
     }
     match line.attribute() {
@@ -354,11 +367,13 @@ fn classify(line: &GameLine) -> Option<TraceLine> {
             kind: TraceKind::Player,
             speaker: line.base.display_name.clone(),
             text: content.to_string(),
+            raw,
         }),
         LineAttribute::Assistant => Some(TraceLine {
             kind: TraceKind::Dialogue,
             speaker: line.base.display_name.clone(),
             text: content.to_string(),
+            raw,
         }),
         LineAttribute::System | LineAttribute::Tool => None,
     }
@@ -495,10 +510,10 @@ mod tests {
             generated: vec![],
             vars: Map::new(),
             lines: vec![
-                TraceLine { kind: TraceKind::Narration, speaker: None, text: "开场".into() },
-                TraceLine { kind: TraceKind::Player, speaker: Some("我".into()), text: "第一句".into() },
-                TraceLine { kind: TraceKind::Dialogue, speaker: Some("钦灵".into()), text: "第二句".into() },
-                TraceLine { kind: TraceKind::Player, speaker: Some("我".into()), text: "第三句".into() },
+                TraceLine { kind: TraceKind::Narration, speaker: None, text: "开场".into(), raw: 0 },
+                TraceLine { kind: TraceKind::Player, speaker: Some("我".into()), text: "第一句".into(), raw: 1 },
+                TraceLine { kind: TraceKind::Dialogue, speaker: Some("钦灵".into()), text: "第二句".into(), raw: 2 },
+                TraceLine { kind: TraceKind::Player, speaker: Some("我".into()), text: "第三句".into(), raw: 3 },
             ],
         };
         trace.write_to(&dir).unwrap();
@@ -512,5 +527,33 @@ mod tests {
         assert!(ch1.contains("开场") && ch1.contains("第一句"), "第一章应含前两条台词: {ch1}");
         assert!(!ch1.contains("第二句"), "第一章不该串到第二章台词: {ch1}");
         assert!(ch2.contains("第二句") && ch2.contains("第三句"), "第二章应含后两条: {ch2}");
+    }
+
+    /// 系统提示被 classify 丢掉后，`ChapterMark.line`（原始下标）不能直接当
+    /// `lines` 的下标用 —— 这个测试钉住那次换算，别再退回按原始下标切章。
+    #[test]
+    fn chapter_ranges_convert_raw_mark_to_filtered_index() {
+        let trace = PlayTrace {
+            script_key: String::new(),
+            script_name: String::new(),
+            chapters: vec![
+                ChapterMark { id: "main".into(), line: 0 },
+                ChapterMark { id: "main2".into(), line: 4 },
+            ],
+            choices: vec![],
+            generated: vec![],
+            vars: Map::new(),
+            // raw=2 的那条（Plot/System 提示）已被筛掉
+            lines: vec![0, 1, 3, 4, 5]
+                .into_iter()
+                .map(|raw| TraceLine {
+                    kind: TraceKind::Player,
+                    speaker: None,
+                    text: format!("line{raw}"),
+                    raw,
+                })
+                .collect(),
+        };
+        assert_eq!(trace.chapter_ranges(), vec![(0, 3), (3, 5)]);
     }
 }

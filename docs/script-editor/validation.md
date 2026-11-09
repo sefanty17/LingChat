@@ -164,6 +164,7 @@ ValidationReport
 
 - **linear**：`next` 与 `next_chapter` 并存 → `chapter_end.both_next_fields · warn`（引擎只优先用 `next`）；都没写 → `chapter_end.no_next · warn`（直接结束整个剧本）；`next` 是遗留字段（Deprecated），编辑器只展示不给编辑；
 - **branching / ai_judged**：缺 options / 空 options → `chapter_end.no_options · error`；分支写成选项形状（`text/actions`）→ `chapter_end.choice_shaped_option · error`（**检测原型形状**）；分支无条件 → `branch_no_condition · warn`；分支无 `next` → `branch_no_next · error`；无 `default` 兜底 → `no_default_branch · warn`；`ai_judged` 分支缺 `name` → `ai_option_no_name · warn`；未知 `end_type` → `chapter_end.unknown_end_type · error`；
+- **generated**：下一章在运行时由 AI 写出来，校验期没有静态去向，因此**不登记章节图的边**，也不要求 `next_chapter` / `options`。若同时写了 `next` / `next_chapter` → `chapter_end.generated_ignores_next · warn`，写了 `options` → `chapter_end.generated_ignores_options · warn`（这些字段引擎会忽略）。可用值：`linear` / `branching` / `ai_judged` / `generated`。
 - 位置：`chapter_end` 不在最后 → `chapter_end.not_last · warn`（后面的事件永远不会执行）。
 
 **章节图的边就是前端流程图的连线**：在这之前流程图只是把章节按文件名字典序排了一列，箭头表达的是「章节 id 的字母顺序」而不是真实跳转 —— 看起来对但完全不对。现在 `ChapterEdge { from, to, is_end, label, end_type }` 由校验器从每章最后一条 `chapter_end` 反推，前端据此画真连线，并据此判断能否拖拽重排（分支章节后端拒绝重排）。

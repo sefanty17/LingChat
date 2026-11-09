@@ -106,10 +106,14 @@ export const actions = {
   },
 
   /** 更新「续写下一章」等待状态（script:generating 事件） */
-  setScriptGenerating(this: GameState, payload: { on: boolean; chapter: string }) {
+  setScriptGenerating(
+    this: GameState,
+    payload: { on: boolean; chapter: string; seq?: number },
+  ) {
     this.scriptGenerating = {
       on: !!payload.on,
       chapter: payload.chapter ?? "",
+      seq: payload.seq ?? 0,
     };
   },
 

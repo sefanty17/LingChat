@@ -29,6 +29,7 @@ export default {
   // 章节末尾 AI 续写下一章时的全屏等待遮罩
   scriptGenerating: {
     title: "正在续写下一章…",
+    stage: "第 {n} 段",
   },
   relationGuard: {
     tipBar: "先给「{name}」补一句对 ta 的认知",

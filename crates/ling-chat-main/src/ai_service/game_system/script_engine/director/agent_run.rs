@@ -23,11 +23,12 @@ pub async fn write_chapter_by_agent(
     ctx: &mut ScriptContext<'_>,
     script: &ScriptStatus,
     chapter_id: &str,
+    seq: u32,
 ) -> Result<()> {
     let script_key = script.path_key().replace('\\', "/");
     let script_dir = script.script_path.clone();
 
-    let channel = build_progress_channel(ctx.app.clone(), chapter_id);
+    let channel = build_progress_channel(ctx.app.clone(), chapter_id, seq);
 
     let title = format!("剧本续写·{}·{}", script.name, chapter_id);
     let conversation_id = db::create_conversation(ctx.db, Some(title), Some(script_key.clone()))
@@ -95,6 +96,7 @@ pub async fn write_chapter_by_agent(
 fn build_progress_channel(
     app: tauri::AppHandle,
     chapter_id: &str,
+    seq: u32,
 ) -> tauri::ipc::Channel<SkillAgentEvent> {
     let chapter = chapter_id.to_string();
     tauri::ipc::Channel::new(move |body| {
@@ -114,6 +116,7 @@ fn build_progress_channel(
         let payload = GeneratingPayload {
             on: true,
             chapter: chapter.clone(),
+            seq,
         };
         let emitted =
             crate::ai_service::message_system::events::emit(&app, SCRIPT_GENERATING, &payload);

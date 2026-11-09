@@ -335,8 +335,11 @@ pub fn build_schema() -> ScriptSchema {
             fields: vec![
                 FieldSpec::new("end_type", "结束方式", FieldKind::Select)
                     .required()
-                    .options(["linear", "branching", "ai_judged"])
-                    .hint("linear 直接跳转；branching 按条件分支；ai_judged 交给 LLM 判断"),
+                    .options(["linear", "branching", "ai_judged", "generated"])
+                    .hint(
+                        "linear 直接跳转；branching 按条件分支；ai_judged 交给 LLM 判断；\
+                         generated 由 AI 按玩家走过的剧情续写下一章",
+                    ),
                 FieldSpec::new("next_chapter", "下一章", FieldKind::Chapter)
                     .hint("仅 linear 使用；选「剧本结束」即整个剧本结束"),
                 FieldSpec::new("options", "分支", FieldKind::BranchOptions)

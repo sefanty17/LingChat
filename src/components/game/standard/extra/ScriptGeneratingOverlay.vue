@@ -3,8 +3,8 @@
   <div v-if="gameStore.scriptGenerating.on" class="script-generating-mask">
     <div class="script-generating-card">
       <div class="script-generating-title">{{ t("game.scriptGenerating.title") }}</div>
-      <div v-if="gameStore.scriptGenerating.chapter" class="script-generating-chapter">
-        {{ gameStore.scriptGenerating.chapter }}
+      <div v-if="gameStore.scriptGenerating.seq > 0" class="script-generating-chapter">
+        {{ t("game.scriptGenerating.stage", { n: gameStore.scriptGenerating.seq }) }}
       </div>
       <div class="script-generating-dots" aria-hidden="true">
         <span></span>

@@ -321,18 +321,34 @@
       next: "bad_end"
     - default: true # 可选，兜底
       next: "normal_end"
+
+# ④ generated：AI 接力续写下一章（作者写到这里收手）
+- type: chapter_end
+  end_type: generated
+  # fallback: "end"   # 可选：生成失败或到达上限时跳到哪一章
+  # max_gen: 3        # 可选：本剧本累计最多续写几段，0 = 关掉续写
+  # mode: template    # 仅供联调：不调 LLM，直接写一段占位剧情
 ```
 
-| 字段                    | 必填      | 类型   | 默认值   | 说明                                           |
-| ----------------------- | --------- | ------ | -------- | ---------------------------------------------- |
-| `end_type`              | 否        | string | `linear` | `linear` / `branching` / `ai_judged`           |
-| `next_chapter` / `next` | 条件必填  | string | —        | 下一章节路径（相对 `Chapters/`），`end` = 结束 |
-| `options`               | 分支必填  | list   | —        | 分支选项列表                                   |
-| `options[].condition`   | 分支      | expr   | —        | branching 分支条件                             |
-| `options[].name`        | ai_judged | string | —        | AI 可选的结局名                                |
-| `options[].next`        | 分支      | string | —        | 对应下一章节                                   |
-| `options[].default`     | 否        | bool   | —        | 兜底分支标记                                   |
-| `prompt`                | ai_judged | string | —        | 给 AI 的判定提示                               |
+| 字段                    | 必填       | 类型   | 默认值   | 说明                                           |
+| ----------------------- | ---------- | ------ | -------- | ---------------------------------------------- |
+| `end_type`              | 否         | string | `linear` | `linear` / `branching` / `ai_judged` / `generated` |
+| `next_chapter` / `next` | 条件必填   | string | —        | 下一章节路径（相对 `Chapters/`），`end` = 结束 |
+| `options`               | 分支必填   | list   | —        | 分支选项列表                                   |
+| `options[].condition`   | 分支       | expr   | —        | branching 分支条件                             |
+| `options[].name`        | ai_judged  | string | —        | AI 可选的结局名                                |
+| `options[].next`        | 分支       | string | —        | 对应下一章节                                   |
+| `options[].default`     | 否         | bool   | —        | 兜底分支标记                                   |
+| `prompt`                | ai_judged  | string | —        | 给 AI 的判定提示                               |
+| `fallback`              | generated  | string | `end`    | 续写失败或到达上限时的去处                     |
+| `max_gen`               | generated  | int    | `20`     | 累计最多续写几段，`0` = 关掉续写               |
+| `mode`                  | generated  | string | `agent`  | `agent` 正式续写；`template` 仅用于联调链路     |
+
+**④ 的用法**：作者想写几章就写几章，在**想收手的那一章末尾**放一个 `end_type: generated`。玩家过完这一段 → 出现等待界面 → 引擎把玩家走过的剧情、所有原话和选择写到 `.agent/play-trace/` → AI 据此写出 `Chapters/__gen/cNNN.yaml` → 直接跳进去接着演。
+
+- `fallback` / `max_gen` / `mode` 也可以统一写在 `story_config.yaml` 的 `dynamic:` 段里（键名分别是 `fallback` / `max_generated` / `mode`），事件上的字段优先。
+- **不要手动把任何一章的 `chapter_end` 接到 `__gen/` 上**，那一章是由运行时找出来的，静态写死会让续写只发生一次。
+- 生成出来的章节自己决定下一步：还要往下走就照样写 `end_type: generated`；剧情收住了写 `end_type: linear` + `next_chapter: "end"`。
 
 ### 17. unlock_achievement — 解锁成就
 

@@ -8,7 +8,7 @@ pub mod trace;
 pub use config::{DirectorConfig, DirectorMode};
 pub use trace::PlayTrace;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 
 use crate::ai_service::game_system::script_engine::events::ScriptContext;
 use crate::ai_service::game_system::script_engine::responses::{
@@ -37,6 +37,11 @@ pub async fn generate_next_chapter(
         }
     }
 
+    // Agent 写 `Chapters/__gen/<id>.yaml`，父目录得先存在（write_file 会建，但不依赖它）。
+    let gen_dir = dir.join("Chapters").join(trace::GEN_DIR);
+    std::fs::create_dir_all(&gen_dir)
+        .with_context(|| format!("无法创建续写章节目录: {:?}", gen_dir))?;
+
     let trace = {
         let gs = ctx.game_status.lock().await;
         PlayTrace::collect(&gs)
@@ -44,23 +49,23 @@ pub async fn generate_next_chapter(
     trace.write_to(&dir)?;
 
     let id = PlayTrace::next_chapter_id(&dir);
-    emit_generating(ctx.app, true, &id);
+    emit_generating(ctx.app, true, &id, seq);
 
     let result = match cfg.mode {
         DirectorMode::Template => template::write_template_chapter(&dir, &id, seq),
         DirectorMode::Agent => {
-            let first = agent_run::write_chapter_by_agent(ctx, &script, &id).await;
+            let first = agent_run::write_chapter_by_agent(ctx, &script, &id, seq).await;
             match first {
                 Ok(()) => Ok(()),
                 Err(e) => {
                     tracing::warn!("[Director] 首次续写失败，重试一次: {:#}", e);
-                    agent_run::write_chapter_by_agent(ctx, &script, &id).await
+                    agent_run::write_chapter_by_agent(ctx, &script, &id, seq).await
                 },
             }
         },
     };
 
-    emit_generating(ctx.app, false, &id);
+    emit_generating(ctx.app, false, &id, seq);
 
     match result {
         Ok(()) => {
@@ -85,10 +90,11 @@ pub async fn generate_next_chapter(
     }
 }
 
-fn emit_generating(app: &tauri::AppHandle, on: bool, chapter: &str) {
+fn emit_generating(app: &tauri::AppHandle, on: bool, chapter: &str, seq: u32) {
     let payload = GeneratingPayload {
         on,
         chapter: chapter.to_string(),
+        seq,
     };
     let emitted = crate::ai_service::message_system::events::emit(app, SCRIPT_GENERATING, &payload);
     if let Err(e) = emitted {
