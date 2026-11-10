@@ -72,6 +72,16 @@ export const startScript = async (scriptName: string): Promise<void> => {
   }
 };
 
+/** 自由剧本：以该剧本作为开头，演完后由 AI 接着续写 */
+export const startFreeScript = async (scriptName: string): Promise<void> => {
+  try {
+    await invoke("start_free_script", { scriptName });
+  } catch (error: any) {
+    console.error("启动自由剧本错误:", error);
+    throw error;
+  }
+};
+
 /** 中止当前正在运行的剧本（放弃本次进度，不记为完成） */
 export const stopScript = async (): Promise<void> => {
   try {

@@ -98,4 +98,12 @@ mod tests {
         let ev = serde_json::json!({ "mode": "template" });
         assert_eq!(DirectorConfig::resolve(&ev, &empty).mode, DirectorMode::Template);
     }
+
+    #[test]
+    fn free_script_key_is_an_internal_var() {
+        // PlayTrace::collect 会剔除 `__` 开头的键；标记必须遵守这个约定，
+        // 否则它会被当成玩家变量写进轨迹和 state.json。
+        assert!(crate::ai_service::game_system::script_engine::director::FREE_SCRIPT_KEY
+            .starts_with("__"));
+    }
 }

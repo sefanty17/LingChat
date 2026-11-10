@@ -42,7 +42,7 @@ import { StartItem, StartLine, StartList } from "../base";
 import PluginTag from "@/components/ui/PluginTag.vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { type ScriptSummary, startScript } from "@/api/services/script-info";
+import { type ScriptSummary, startFreeScript, startScript } from "@/api/services/script-info";
 import { useGameStore } from "@/stores/modules/game";
 import { useUIStore } from "@/stores/modules/ui/ui";
 
@@ -54,6 +54,10 @@ const props = defineProps({
   scripts: {
     type: Array as () => ScriptSummary[],
     default: [],
+  },
+  free: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -81,7 +85,11 @@ const selectScript = async (script: ScriptSummary) => {
   gameStore.enterStoryMode(script.script_name);
 
   try {
-    await startScript(script.script_name);
+    if (props.free) {
+      await startFreeScript(script.script_name);
+    } else {
+      await startScript(script.script_name);
+    }
   } catch (error) {
     gameStore.exitStoryMode();
     console.error("启动剧本失败:", error);

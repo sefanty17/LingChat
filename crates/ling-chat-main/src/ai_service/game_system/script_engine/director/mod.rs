@@ -8,6 +8,10 @@ pub mod trace;
 pub use config::{DirectorConfig, DirectorMode};
 pub use trace::PlayTrace;
 
+/// 自由剧本模式的标记，存在 `ScriptStatus.vars` 里。
+/// 以 `__` 开头 → `PlayTrace::collect` 会过滤掉，且存档/读档会自然带着它走。
+pub const FREE_SCRIPT_KEY: &str = "__free_script";
+
 use anyhow::{Context, Result, anyhow};
 
 use crate::ai_service::game_system::script_engine::events::ScriptContext;
@@ -85,6 +89,48 @@ pub async fn generate_next_chapter(
         },
         Err(e) => {
             tracing::error!("[Director] 续写失败: {:#}", e);
+            Ok(None)
+        },
+    }
+}
+
+/// 自由剧本：作者写的开头剧本自然演到 `"end"` 时，不收场，交给 director 接着写。
+///
+/// 返回 `None` 表示「不该接管」（不是自由剧本 / 已经在生成章节里 / 到了生成上限），
+/// 调用方保持原来的 `"end"` 即可。
+pub async fn continue_if_free_script(
+    ctx: &mut ScriptContext<'_>,
+    event: &serde_json::Value,
+) -> Result<Option<String>> {
+    let (enabled, settings) = {
+        let gs = ctx.game_status.lock().await;
+        let Some(ss) = gs.script_status.as_ref() else {
+            return Ok(None);
+        };
+        // 生成出来的章节自己写 end = AI 判断该收束了，别再接管，否则永远停不下来。
+        let gen_prefix = format!("{}/", trace::GEN_DIR);
+        if ss.current_chapter_key.starts_with(&gen_prefix) {
+            return Ok(None);
+        }
+        let on = ss
+            .vars
+            .get(FREE_SCRIPT_KEY)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        (on, ss.settings.clone())
+    };
+    if !enabled {
+        return Ok(None);
+    }
+
+    let cfg = DirectorConfig::resolve(event, &settings);
+    match generate_next_chapter(ctx, &cfg).await? {
+        Some(id) => {
+            tracing::info!("[Director] 自由剧本接管：开头剧本已演完，续写 {}", id);
+            Ok(Some(id))
+        },
+        None => {
+            tracing::info!("[Director] 自由剧本已到续写上限，正常收场");
             Ok(None)
         },
     }

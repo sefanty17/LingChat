@@ -55,6 +55,7 @@ export default {
     credits: "Credits",
     exitGame: "Exit Game",
     freeDialogue: "Free Chat Mode",
+    freeScript: "Free Script",
     storyMode: "Story Mode",
     scriptEditor: "Workshop",
     cloudWorkshop: "Cloud Workshop",

@@ -54,6 +54,7 @@ export default {
     credits: "クレジット",
     exitGame: "ゲーム終了",
     freeDialogue: "フリー会話モード",
+    freeScript: "フリー脚本",
     storyMode: "ストーリーモード",
     scriptEditor: "クリエイティブ工房",
     cloudWorkshop: "クラウド工房",

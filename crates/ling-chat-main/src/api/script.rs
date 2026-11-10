@@ -194,6 +194,31 @@ pub async fn start_script(app: AppHandle, script_name: String) -> Result<(), Str
     Ok(())
 }
 
+/// 自由剧本：以任意已加载剧本作为「开头」，演完后由 AI 按玩家轨迹续写。
+/// 标记放在 vars 里，存档 / 读档会自然带着它走。
+#[tauri::command]
+pub async fn start_free_script(app: AppHandle, script_name: String) -> Result<(), String> {
+    let mut script = {
+        let state = app.state::<AppState>();
+        let service = state.ai_service.lock().await;
+        ensure_no_script_running(&service)?;
+        service
+            .script_manager
+            .all_scripts
+            .get(&script_name)
+            .ok_or_else(|| format!("剧本不存在: '{}'", script_name))?
+            .clone()
+    };
+
+    script.vars.insert(
+        crate::ai_service::game_system::script_engine::director::FREE_SCRIPT_KEY.to_string(),
+        serde_json::Value::Bool(true),
+    );
+    spawn_script_execution(app, script).await;
+
+    Ok(())
+}
+
 /// 结束当前正在运行的剧本（放弃本次进度，不记为完成）。
 #[tauri::command]
 pub async fn stop_script(app: AppHandle) -> Result<(), String> {

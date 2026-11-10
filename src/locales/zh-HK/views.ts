@@ -53,6 +53,7 @@ export default {
     credits: "致謝名單",
     exitGame: "退出遊戲",
     freeDialogue: "自由傾偈模式",
+    freeScript: "自由劇本",
     storyMode: "劇情模式",
     scriptEditor: "創意工坊",
     cloudWorkshop: "雲·創意工坊",

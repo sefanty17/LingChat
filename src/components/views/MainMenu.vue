@@ -69,17 +69,19 @@
             v-if="menuState === 'gameMode'"
             @back="backToMainMenu"
             @open-scripts="showScriptModeMenu"
+            @open-free-scripts="showFreeScriptMenu"
             :loadingScripts="loadingScripts"
             :scripts="scripts"
           />
         </Transition>
 
-        <!-- 剧本模式菜单 -->
+        <!-- 剧本模式菜单 / 自由剧本选开头 -->
         <Transition name="slide-right">
           <ScriptModeOptions
-            v-if="menuState === 'scriptMode'"
+            v-if="menuState === 'scriptMode' || menuState === 'freeScript'"
             @back="showGameModeMenu"
             :scripts="scripts"
+            :free="menuState === 'freeScript'"
           />
         </Transition>
 
@@ -100,6 +102,7 @@
 
 <script setup lang="ts">
 import { getScriptList, type ScriptSummary } from "@/api/services/script-info";
+import { rescanScripts } from "@/api/services/script-editor";
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
@@ -127,7 +130,7 @@ const currentPage = ref("mainMenu");
 // 而菜单需要立刻回场与它重叠
 const settingsMounted = ref(false);
 let settingsMountFrame: number | null = null;
-const menuState = ref<"main" | "gameMode" | "scriptMode" | "workshop">("main");
+const menuState = ref<"main" | "gameMode" | "scriptMode" | "freeScript" | "workshop">("main");
 const scripts = ref<ScriptSummary[]>([]);
 const loadingScripts = ref(false);
 const starsEnabled = computed(() => settingsStore.mainMenuStarsEnabled);
@@ -157,6 +160,17 @@ function backToMainMenu() {
 }
 function showScriptModeMenu() {
   menuState.value = "scriptMode";
+}
+/** 自由剧本：编辑器里刚新建/改过的剧本可能还没被引擎扫描到，先重扫再给玩家挑 */
+async function showFreeScriptMenu() {
+  try {
+    await rescanScripts();
+    scripts.value = await getScriptList();
+  } catch (error) {
+    // 重扫失败（比如还有剧本在跑）不拦着进菜单，用现有列表兜底
+    console.error("刷新剧本列表失败:", error);
+  }
+  menuState.value = "freeScript";
 }
 function showWorkshopMenu() {
   menuState.value = "workshop";

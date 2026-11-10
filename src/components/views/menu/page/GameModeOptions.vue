@@ -7,6 +7,12 @@
     </StartLine>
 
     <StartLine>
+      <StartItem class="menu-subitem" @click="emit('open-free-scripts')">{{
+        $t("views.menu.freeScript")
+      }}</StartItem>
+    </StartLine>
+
+    <StartLine>
       <StartItem class="menu-subitem" disabled="true">{{ $t("views.menu.storyMode") }}</StartItem>
     </StartLine>
 
@@ -32,6 +38,7 @@ import { eventQueue } from "@/core/events/event-queue";
 const emit = defineEmits<{
   (e: "back"): void;
   (e: "open-scripts"): void;
+  (e: "open-free-scripts"): void;
 }>();
 
 const router = useRouter();

@@ -73,7 +73,7 @@ impl ScriptEvent for ChapterEndEvent {
             }
         }
 
-        let next = match self.end_type.as_str() {
+        let mut next = match self.end_type.as_str() {
             "linear" => self
                 .next
                 .clone()
@@ -141,6 +141,19 @@ impl ScriptEvent for ChapterEndEvent {
                 "end".to_string()
             },
         };
+
+        // 自由剧本：作者写的开头剧本演到 end 时不收场，交给 director 接着写。
+        // 显式 end_type: generated 上面已经生成过一次，这里不能重复接管。
+        if next == "end" && self.end_type != "generated" {
+            if let Some(id) =
+                crate::ai_service::game_system::script_engine::director::continue_if_free_script(
+                    ctx, &self.raw,
+                )
+                .await?
+            {
+                next = id;
+            }
+        }
 
         tracing::info!(
             "[ChapterEndEvent] end_type={} → next: '{}'",
